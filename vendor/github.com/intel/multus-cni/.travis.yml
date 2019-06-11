@@ -1,0 +1,92 @@
+language: go
+# see https://docs.travis-ci.com/user/reference/overview/#Virtualization-environments
+# for the detail
+# sudo: requried
+dist: trusty
+
+go:
+  - 1.11.x
+
+env:
+  global:
+    - REGISTRY_USER=${REGISTRY_USER}
+    - REGISTRY_PASS=${REGISTRY_PASS}
+    - MULTUS_GOPATH=${PWD}/gopath
+    - secure: "${REGISTRY_SECURE}"
+
+before_install:
+  - sudo apt-get update -qq
+  - go get github.com/mattn/goveralls
+
+install:
+  - go get -u golang.org/x/lint/golint
+
+before_script:
+  # Make gopath... to run golint/go fmt/go vet
+  - |-
+    if [ ! -h gopath/src/github.com/intel/multus-cni ]; then
+        mkdir -p gopath/src/github.com/intel
+        ln -s ../../../.. gopath/src/github.com/intel/multus-cni || exit 255
+    fi
+  - env GOPATH=${MULTUS_GOPATH} golint gopath/src/github.com/intel/multus-cni/multus/... | grep -v ALL_CAPS | xargs -r false
+  - env GOPATH=${MULTUS_GOPATH} go fmt gopath/src/github.com/intel/multus-cni/...
+  - go tool vet */*.go
+#  - gocyclo -over 15 ./multus
+
+script:
+  - ./build
+  - sudo ./test.sh
+  - |-
+    GOV_GOPATH=${PWD}/gopath
+    pushd gopath/src/github.com/intel/multus-cni
+    env GOPATH=${GOV_GOPATH} ${GOPATH}/bin/goveralls -coverprofile=coverage.out -service=travis-ci
+    popd
+  - mkdir -p ${TRAVIS_BUILD_DIR}/dist
+  - tar cvfz ${TRAVIS_BUILD_DIR}/dist/multus-cni_amd64.tar.gz --warning=no-file-changed --exclude="dist" --exclude="vendor" .
+  - docker build -t nfvpe/multus .
+
+deploy:
+  # Release on versioned tag (e.g. v1.0)
+  - provider: script
+    #skip_cleanup: true
+    script: curl -sL https://git.io/goreleaser | bash
+    on:
+      tags: true
+      all_branches: true
+      condition: "$TRAVIS_TAG =~ ^v[0-9].*$"
+  # Push images to Dockerhub on tag
+  - provider: script
+    skip_cleanup: true
+    script: >
+      bash -c '
+      docker tag nfvpe/multus nfvpe/multus:$TRAVIS_TAG;
+      docker tag nfvpe/multus nfvpe/multus:stable;
+      docker login -u "$REGISTRY_USER" -p "$REGISTRY_PASS"; 
+      docker push nfvpe/multus;
+      docker push nfvpe/multus:stable;
+      docker push nfvpe/multus:$TRAVIS_TAG;
+      echo done'
+    on:
+      tags: true
+      all_branches: true
+      condition: "$TRAVIS_TAG =~ ^v[0-9].*$"
+  # Push images to Dockerhub on merge to master
+  - provider: script
+    on:
+      branch: master
+    script: >
+      bash -c '
+      docker tag nfvpe/multus nfvpe/multus:snapshot;
+      docker login -u "$REGISTRY_USER" -p "$REGISTRY_PASS";
+      docker push nfvpe/multus:snapshot;
+      docker push nfvpe/multus:latest;
+      echo done'
+
+after_success:
+  # put build tgz to bintray
+  - curl -T ${TRAVIS_BUILD_DIR}/dist/multus-cni_amd64.tar.gz -u${BINTRAY_USER}:${BINTRAY_APIKEY} https://api.bintray.com/content/redhat-nfvpe/multus-cni-crd-snapshots/snapshot/snapshot-${TRAVIS_COMMIT}/multus-cni_amd64-${TRAVIS_COMMIT}.tar.gz
+  # publish uploaded file
+  - curl -X POST -u${BINTRAY_USER}:${BINTRAY_APIKEY} https://api.bintray.com/content/redhat-nfvpe/multus-cni-crd-snapshots/snapshot/snapshot-${TRAVIS_COMMIT}/publish
+  # put it in bintray download list
+  - sleep 20
+  - "curl -X PUT -H 'Accept: application/json' -H 'Content-type: application/json' -u${BINTRAY_USER}:${BINTRAY_APIKEY} https://api.bintray.com/file_metadata/redhat-nfvpe/multus-cni-crd-snapshots/multus-cni_amd64-${TRAVIS_COMMIT}.tar.gz -d '{\"list_in_downloads\":true}'"
