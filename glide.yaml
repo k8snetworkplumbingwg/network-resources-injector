@@ -1,0 +1,38 @@
+package: github.com/intel/network-resources-injector
+import:
+- package: github.com/cloudflare/cfssl
+  version: ~1.3.3
+  subpackages:
+  - csr
+- package: github.com/golang/glog
+- package: github.com/intel/multus-cni
+  version: ~3.2
+  subpackages:
+  - types
+- package: github.com/pkg/errors
+  version: ~0.8.1
+- package: k8s.io/api
+  subpackages:
+  - admission/v1beta1
+  - admissionregistration/v1beta1
+  - certificates/v1beta1
+  - core/v1
+- package: k8s.io/apimachinery
+  subpackages:
+  - pkg/api/resource
+  - pkg/apis/meta/v1
+  - pkg/runtime
+  - pkg/runtime/serializer
+  - pkg/util/intstr
+- package: k8s.io/client-go
+  version: ~11.0.0
+  subpackages:
+  - kubernetes
+  - rest
+testImport:
+- package: github.com/onsi/ginkgo
+  version: ~1.8.0
+  subpackages:
+  - extensions/table
+- package: github.com/onsi/gomega
+  version: ~1.5.0

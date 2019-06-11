@@ -1,0 +1,54 @@
+# Copyright (c) 2019 Intel Corporation
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http:#www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    app: network-resources-injector
+  name: network-resources-injector
+  namespace: kube-system
+spec:
+  serviceAccount: network-resources-injector-sa
+  containers:
+  - name: webhook-server
+    image: network-resources-injector
+    imagePullPolicy: IfNotPresent
+    command:
+    - webhook
+    args:
+    - -bind-address=0.0.0.0
+    - -port=443
+    - -tls-private-key-file=/etc/tls/tls.key
+    - -tls-cert-file=/etc/tls/tls.crt
+    - -alsologtostderr=true
+    volumeMounts:
+    - mountPath: /etc/tls
+      name: tls
+  initContainers:
+  - name: installer
+    image: network-resources-injector:latest
+    imagePullPolicy: IfNotPresent
+    command:
+    - installer
+    args:
+    - -name=network-resources-injector
+    - -namespace=kube-system
+    - -alsologtostderr
+    volumeMounts:
+    - name: tls
+      mountPath: /etc/tls
+  volumes:
+  - name: tls
+    emptyDir: {}
