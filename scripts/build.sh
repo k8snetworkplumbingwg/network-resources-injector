@@ -25,5 +25,5 @@ docker build --build-arg http_proxy=${http_proxy} \
              --build-arg HTTPS_PROXY=${HTTPS_PROXY} \
              --build-arg no_proxy=${no_proxy} \
              --build-arg NO_PROXY=${NO_PROXY} \
-             -f build/Dockerfile \
+             -f Dockerfile \
              -t network-resources-injector .
