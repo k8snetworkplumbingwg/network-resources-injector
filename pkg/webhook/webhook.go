@@ -133,6 +133,13 @@ func deserializePod(ar *v1beta1.AdmissionReview) (corev1.Pod, error) {
 	}
 	return pod, err
 }
+
+func toSafeJsonPatchKey(in string) string {
+	out := strings.Replace(in, "~", "~0", -1)
+	out = strings.Replace(out, "/", "~1", -1)
+	return out
+}
+
 func parsePodNetworkSelections(podNetworks, defaultNamespace string) ([]*types.NetworkSelectionElement, error) {
 	var networkSelections []*types.NetworkSelectionElement
 
@@ -322,16 +329,18 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 				resourceList[corev1.ResourceName(name)] = *resource.NewQuantity(number, resource.DecimalSI)
 			}
 
-			patch = append(patch, jsonPatchOperation{
-				Operation: "add",
-				Path:      "/spec/containers/0/resources/requests", // NOTE: in future we may want to patch specific container (not always the first one)
-				Value:     resourceList,
-			})
-			patch = append(patch, jsonPatchOperation{
-				Operation: "add",
-				Path:      "/spec/containers/0/resources/limits",
-				Value:     resourceList,
-			})
+			for resource, quantity := range resourceList {
+				patch = append(patch, jsonPatchOperation{
+					Operation: "add",
+					Path:      "/spec/containers/0/resources/requests/" + toSafeJsonPatchKey(resource.String()), // NOTE: in future we may want to patch specific container (not always the first one)
+					Value:     quantity,
+				})
+				patch = append(patch, jsonPatchOperation{
+					Operation: "add",
+					Path:      "/spec/containers/0/resources/limits/" + toSafeJsonPatchKey(resource.String()),
+					Value:     quantity,
+				})
+			}
 			patchBytes, _ := json.Marshal(patch)
 			ar.Response.Patch = patchBytes
 		}
