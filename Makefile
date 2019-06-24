@@ -15,6 +15,9 @@
 default :
 	scripts/build.sh
 
+image :
+	scripts/build-image.sh
+
 test :
 	export t="/tmp/go-cover.$$.tmp" && go test -coverprofile=$t ./... && go tool cover -html=$t
 
