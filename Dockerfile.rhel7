@@ -1,14 +1,10 @@
 FROM openshift/origin-release:golang-1.10 as builder
-
-ENV PKG_NAME=github.com/intel/network-resources-injector
-ENV PKG_PATH=$GOPATH/src/$PKG_NAME
-WORKDIR $PKG_PATH
-
-COPY . $PKG_PATH/
-RUN go install ./cmd/...
+ADD . /usr/src/network-resources-injector
+RUN cd /usr/src/network-resources-injector && make
 
 FROM openshift/origin-base
-COPY --from=builder /go/bin/webhook /go/bin/installer /usr/bin/
+COPY --from=builder /usr/src/network-resources-injector/bin/webhook /usr/bin/
+COPY --from=builder /usr/src/network-resources-injector/bin/installer /usr/bin/
 
 LABEL io.k8s.display-name="SRIOV Admission Controller"
 

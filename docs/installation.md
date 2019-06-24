@@ -4,7 +4,7 @@
 Go to the root directory of the Network Resources Injector and build image:
 ```
 cd $GOPATH/src/github.com/intel/network-resources-injector
-make
+make image
 ```
 
 ## Deploying webhook application

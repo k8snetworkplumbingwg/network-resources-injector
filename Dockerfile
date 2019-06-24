@@ -13,15 +13,13 @@
 # limitations under the License.
 
 FROM golang:1.12-alpine as builder
-
-ENV PKG_NAME=github.com/intel/network-resources-injector
-ENV PKG_PATH=$GOPATH/src/$PKG_NAME
-WORKDIR $PKG_PATH
-
-COPY . $PKG_PATH/
-RUN go install ./cmd/...
+ADD . /usr/src/network-resources-injector
+RUN apk add --update --virtual build-dependencies build-base linux-headers && \
+    cd /usr/src/network-resources-injector && \
+    make
 
 FROM golang:1.12-alpine
-COPY --from=builder /go/bin/webhook /go/bin/installer /usr/bin/
+COPY --from=builder /usr/src/network-resources-injector/bin/webhook /usr/bin/
+COPY --from=builder /usr/src/network-resources-injector/bin/installer /usr/bin/
 
 CMD ["webhook"]
