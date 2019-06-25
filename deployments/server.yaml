@@ -23,7 +23,7 @@ spec:
   serviceAccount: network-resources-injector-sa
   containers:
   - name: webhook-server
-    image: network-resources-injector
+    image: network-resources-injector:latest
     imagePullPolicy: IfNotPresent
     command:
     - webhook
@@ -52,3 +52,12 @@ spec:
   volumes:
   - name: tls
     emptyDir: {}
+
+# For third-party certificate, use secret resource
+# instead of self-generated one from installer as below:
+#
+# 1) Remove initContainers from Pod spec.
+# 2) Replace `emptyDir: {}` with below config
+#
+#   secret:
+#     secretName: network-resources-injector-secret
