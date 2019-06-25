@@ -265,6 +265,64 @@ func patchEmptyResources(patch []jsonPatchOperation, containerIndex uint, key st
 		Path:      "/spec/containers/" + fmt.Sprintf("%d", containerIndex) + "/resources/" + toSafeJsonPatchKey(key),
 		Value:     corev1.ResourceList{},
 	})
+}
+
+func addVolDownwardAPI(patch []jsonPatchOperation) []jsonPatchOperation {
+	labels := corev1.ObjectFieldSelector{
+		FieldPath:"metadata.labels",
+	}
+	dAPILabels := corev1.DownwardAPIVolumeFile{
+		Path: "labels",
+		FieldRef: &labels,
+	}
+	annotations := corev1.ObjectFieldSelector{
+		FieldPath:"metadata.annotations",
+	}
+	dAPIAnnotations := corev1.DownwardAPIVolumeFile{
+		Path: "annotations",
+		FieldRef: &annotations,
+	}
+	dAPIItems := []corev1.DownwardAPIVolumeFile{dAPILabels, dAPIAnnotations}
+	dAPIVolSource := corev1.DownwardAPIVolumeSource{
+		Items: dAPIItems,
+	}
+	volSource := corev1.VolumeSource{
+		DownwardAPI: &dAPIVolSource,
+	}
+	vol := corev1.Volume{
+		Name: "podnetinfo",
+		VolumeSource: volSource,
+	}
+
+	patch = append(patch, jsonPatchOperation{
+		Operation: "add",
+		Path:      "/spec/volumes/-",
+		Value:    vol,
+	})
+
+	return patch
+}
+
+func addVolumeMount(patch []jsonPatchOperation) []jsonPatchOperation {
+
+	vm := corev1.VolumeMount{
+		Name: "podnetinfo",
+		ReadOnly: false,
+		MountPath: "/etc/podnetinfo",
+	}
+
+	patch = append(patch, jsonPatchOperation{
+		Operation: "add",
+		Path:      "/spec/containers/0/volumeMounts/-", // NOTE: in future we may want to patch specific container (not always the first one)
+		Value:      vm,
+	})
+
+	return patch
+}
+
+func createVolPatch(patch []jsonPatchOperation) []jsonPatchOperation {
+	patch = addVolumeMount(patch)
+	patch = addVolDownwardAPI(patch)
 	return patch
 }
 
@@ -358,11 +416,15 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 					Value:     quantity,
 				})
 			}
+
+			patch = createVolPatch(patch)
+			glog.Infof("patch after all mutations", patch)
+
 			patchBytes, _ := json.Marshal(patch)
 			ar.Response.Patch = patchBytes
 		}
 	} else {
-		/* network annoation not provided or empty */
+		/* network annotation not provided or empty */
 		glog.Infof("pod spec doesn't have network annotations. Skipping...")
 		err = prepareAdmissionReviewResponse(true, "Pod spec doesn't have network annotations. Skipping...", ar)
 		if err != nil {
