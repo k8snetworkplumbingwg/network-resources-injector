@@ -1,0 +1,19 @@
+---
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: network-resources-injector-config
+  namespace: kube-system
+webhooks:
+  - name: network-resources-injector-config.k8s.io
+    clientConfig:
+      service:
+        name: network-resources-injector-service
+        namespace: ${NAMESPACE}
+        path: "/mutate"
+      caBundle: ${CA_BUNDLE}
+    rules:
+      - operations: [ "CREATE" ]
+        apiGroups: ["apps", ""]
+        apiVersions: ["v1"]
+        resources: ["pods"]
