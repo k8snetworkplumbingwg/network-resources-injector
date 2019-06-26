@@ -259,6 +259,15 @@ func writeResponse(w http.ResponseWriter, ar *v1beta1.AdmissionReview) {
 	w.Write(resp)
 }
 
+func patchEmptyResources(patch []jsonPatchOperation, containerIndex uint, key string) []jsonPatchOperation {
+	patch = append(patch, jsonPatchOperation{
+		Operation: "add",
+		Path:      "/spec/containers/" + fmt.Sprintf("%d", containerIndex) + "/resources/" + toSafeJsonPatchKey(key),
+		Value:     corev1.ResourceList{},
+	})
+	return patch
+}
+
 // MutateHandler handles AdmissionReview requests and sends responses back to the K8s API server
 func MutateHandler(w http.ResponseWriter, req *http.Request) {
 	glog.Infof("Received mutation request")
@@ -323,6 +332,14 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 			glog.Infof("pod doesn't need any custom network resources")
 		} else {
 			var patch []jsonPatchOperation
+
+			/* check whether resources paths exists in the first container and add as the first patches if missing */
+			if len(pod.Spec.Containers[0].Resources.Requests) == 0 {
+				patch = patchEmptyResources(patch, 0, "requests")
+			}
+			if len(pod.Spec.Containers[0].Resources.Limits) == 0 {
+				patch = patchEmptyResources(patch, 0, "limits")
+			}
 
 			resourceList := corev1.ResourceList{}
 			for name, number := range resourceRequests {
