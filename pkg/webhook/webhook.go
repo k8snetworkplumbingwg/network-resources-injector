@@ -265,6 +265,7 @@ func patchEmptyResources(patch []jsonPatchOperation, containerIndex uint, key st
 		Path:      "/spec/containers/" + fmt.Sprintf("%d", containerIndex) + "/resources/" + toSafeJsonPatchKey(key),
 		Value:     corev1.ResourceList{},
 	})
+	return patch
 }
 
 func addVolDownwardAPI(patch []jsonPatchOperation) []jsonPatchOperation {
