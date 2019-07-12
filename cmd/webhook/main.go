@@ -15,11 +15,13 @@
 package main
 
 import (
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"net/http"
 
 	"github.com/golang/glog"
+	"github.com/fsnotify/fsnotify"
 	"github.com/intel/network-resources-injector/pkg/webhook"
 )
 
@@ -33,15 +35,64 @@ func main() {
 
 	glog.Infof("starting mutating admission controller for network resources injection")
 
+	keyPair, err := webhook.NewTlsKeypairReloader(*cert, *key)
+	if err != nil {
+		glog.Fatalf("error load certificate: %s", err.Error())
+	}
+
 	/* init API client */
 	webhook.SetupInClusterClient()
 
-	/* register handlers */
-	http.HandleFunc("/mutate", webhook.MutateHandler)
+	go func() {
+		/* register handlers */
+		var httpServer *http.Server
+		http.HandleFunc("/mutate", webhook.MutateHandler)
 
-	/* start serving */
-	err := http.ListenAndServeTLS(fmt.Sprintf("%s:%d", *address, *port), *cert, *key, nil)
+		/* start serving */
+		httpServer = &http.Server{
+			Addr: fmt.Sprintf("%s:%d", *address, *port),
+			TLSConfig: &tls.Config{
+				GetCertificate: keyPair.GetCertificateFunc(),
+			},
+		}
+
+		err := httpServer.ListenAndServeTLS("", "")
+		if err != nil {
+			glog.Fatalf("error starting web server: %v", err)
+		}
+	}()
+
+	/* watch the cert file and restart http sever if the file updated. */
+	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		glog.Fatalf("error starting web server: %s", err)
+		glog.Fatalf("error starting fsnotify watcher: %v", err)
+	}
+	defer watcher.Close()
+
+	for {
+		watcher.Add(*cert)
+		watcher.Add(*key)
+
+		select {
+		case event, ok := <-watcher.Events:
+			if !ok {
+				continue
+			}
+			glog.Infof("watcher event: %v", event)
+			if event.Op & fsnotify.Create == fsnotify.Create ||
+				event.Op & fsnotify.Rename == fsnotify.Rename ||
+				event.Op & fsnotify.Remove == fsnotify.Remove ||
+				event.Op & fsnotify.Write == fsnotify.Write {
+				glog.Infof("modified file: %v", event.Name)
+				if err := keyPair.MaybeReload(); err != nil {
+					glog.Fatalf("Failed to reload certificate: %v", err)
+				}
+			}
+		case err, ok := <-watcher.Errors:
+			if !ok {
+				continue
+			}
+			glog.Infof("watcher error: %v", err)
+		}
 	}
 }
