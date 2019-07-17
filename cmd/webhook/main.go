@@ -79,12 +79,11 @@ func main() {
 				continue
 			}
 			glog.Infof("watcher event: %v", event)
-			if event.Op & fsnotify.Create == fsnotify.Create ||
-				event.Op & fsnotify.Rename == fsnotify.Rename ||
-				event.Op & fsnotify.Remove == fsnotify.Remove ||
-				event.Op & fsnotify.Write == fsnotify.Write {
+			mask := fsnotify.Create | fsnotify.Rename | fsnotify.Remove |
+				fsnotify.Write | fsnotify.Chmod
+			if (event.Op & mask) != 0 {
 				glog.Infof("modified file: %v", event.Name)
-				if err := keyPair.MaybeReload(); err != nil {
+				if err := keyPair.Reload(); err != nil {
 					glog.Fatalf("Failed to reload certificate: %v", err)
 				}
 			}

@@ -28,7 +28,7 @@ type tlsKeypairReloader struct {
 	keyPath   string
 }
 
-func (keyPair *tlsKeypairReloader) MaybeReload() error {
+func (keyPair *tlsKeypairReloader) Reload() error {
 	newCert, err := tls.LoadX509KeyPair(keyPair.certPath, keyPair.keyPath)
 	if err != nil {
 		return err
