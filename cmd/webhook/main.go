@@ -69,6 +69,9 @@ func main() {
 	}
 	defer watcher.Close()
 
+	certUpdated := false
+	keyUpdated := false
+
 	for {
 		watcher.Add(*cert)
 		watcher.Add(*key)
@@ -83,8 +86,18 @@ func main() {
 				fsnotify.Write | fsnotify.Chmod
 			if (event.Op & mask) != 0 {
 				glog.Infof("modified file: %v", event.Name)
-				if err := keyPair.Reload(); err != nil {
-					glog.Fatalf("Failed to reload certificate: %v", err)
+				if event.Name == *cert {
+					certUpdated = true
+				}
+				if event.Name == *key {
+					keyUpdated = true
+				}
+				if keyUpdated && certUpdated {
+					if err := keyPair.Reload(); err != nil {
+						glog.Fatalf("Failed to reload certificate: %v", err)
+					}
+					certUpdated = false
+					keyUpdated = false
 				}
 			}
 		case err, ok := <-watcher.Errors:
