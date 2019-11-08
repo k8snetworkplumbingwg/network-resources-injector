@@ -24,6 +24,7 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/intel/multus-cni/types"
+	cniv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	"github.com/pkg/errors"
 
 	"k8s.io/api/admission/v1beta1"
@@ -116,9 +117,9 @@ func deserializeAdmissionReview(body []byte) (*v1beta1.AdmissionReview, error) {
 	return ar, err
 }
 
-func deserializeNetworkAttachmentDefinition(ar *v1beta1.AdmissionReview) (types.NetworkAttachmentDefinition, error) {
+func deserializeNetworkAttachmentDefinition(ar *v1beta1.AdmissionReview) (cniv1.NetworkAttachmentDefinition, error) {
 	/* unmarshal NetworkAttachmentDefinition from AdmissionReview request */
-	netAttachDef := types.NetworkAttachmentDefinition{}
+	netAttachDef := cniv1.NetworkAttachmentDefinition{}
 	err := json.Unmarshal(ar.Request.Object.Raw, &netAttachDef)
 	return netAttachDef, err
 }
@@ -228,7 +229,7 @@ func parsePodNetworkSelectionElement(selection, defaultNamespace string) (*types
 	return networkSelectionElement, nil
 }
 
-func getNetworkAttachmentDefinition(namespace, name string) (*types.NetworkAttachmentDefinition, error) {
+func getNetworkAttachmentDefinition(namespace, name string) (*cniv1.NetworkAttachmentDefinition, error) {
 	path := fmt.Sprintf("/apis/k8s.cni.cncf.io/v1/namespaces/%s/network-attachment-definitions/%s", namespace, name)
 	rawNetworkAttachmentDefinition, err := clientset.ExtensionsV1beta1().RESTClient().Get().AbsPath(path).DoRaw()
 	if err != nil {
@@ -237,7 +238,7 @@ func getNetworkAttachmentDefinition(namespace, name string) (*types.NetworkAttac
 		return nil, err
 	}
 
-	networkAttachmentDefinition := types.NetworkAttachmentDefinition{}
+	networkAttachmentDefinition := cniv1.NetworkAttachmentDefinition{}
 	json.Unmarshal(rawNetworkAttachmentDefinition, &networkAttachmentDefinition)
 
 	return &networkAttachmentDefinition, nil
@@ -371,7 +372,7 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 			glog.Infof("network attachment definition '%s/%s' found", n.Namespace, n.Name)
 
 			/* network object exists, so check if it contains resourceName annotation */
-			if resourceName, exists := networkAttachmentDefinition.Metadata.Annotations[networkResourceNameKey]; exists {
+			if resourceName, exists := networkAttachmentDefinition.ObjectMeta.Annotations[networkResourceNameKey]; exists {
 				/* add resource to map/increment if it was already there */
 				resourceRequests[resourceName]++
 				glog.Infof("resource '%s' needs to be requested for network '%s/%s'", resourceName, n.Namespace, n.Name)

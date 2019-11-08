@@ -16,11 +16,9 @@ package libcni_test
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 
 	"github.com/containernetworking/cni/libcni"
@@ -31,18 +29,6 @@ import (
 )
 
 var _ = Describe("Backwards compatibility", func() {
-	var cacheDirPath string
-
-	BeforeEach(func() {
-		var err error
-		cacheDirPath, err = ioutil.TempDir("", "cni_cachedir")
-		Expect(err).NotTo(HaveOccurred())
-	})
-
-	AfterEach(func() {
-		Expect(os.RemoveAll(cacheDirPath)).To(Succeed())
-	})
-
 	It("correctly handles the response from a legacy plugin", func() {
 		example := legacy_examples.V010
 		pluginPath, err := example.Build()
@@ -56,10 +42,9 @@ var _ = Describe("Backwards compatibility", func() {
 			ContainerID: "some-container-id",
 			NetNS:       "/some/netns/path",
 			IfName:      "eth0",
-			CacheDir:    cacheDirPath,
 		}
 
-		cniConfig := libcni.NewCNIConfig([]string{filepath.Dir(pluginPath)}, nil)
+		cniConfig := &libcni.CNIConfig{Path: []string{filepath.Dir(pluginPath)}}
 
 		result, err := cniConfig.AddNetwork(netConf, runtimeConf)
 		Expect(err).NotTo(HaveOccurred())
@@ -70,9 +55,6 @@ var _ = Describe("Backwards compatibility", func() {
 	})
 
 	It("correctly handles the request from a runtime with an older libcni", func() {
-		if runtime.GOOS == "windows" {
-			Skip("cannot build old runtime on windows")
-		}
 		example := legacy_examples.V010_Runtime
 
 		binPath, err := example.Build()

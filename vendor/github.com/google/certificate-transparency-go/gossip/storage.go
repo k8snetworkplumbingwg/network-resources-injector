@@ -204,10 +204,10 @@ func (s *Storage) addSCTFeedbackIfNotExists(tx *sql.Tx, chainID, sctID int64) er
 	stmt := tx.Stmt(s.insertSCTFeedback)
 	_, err := stmt.Exec(chainID, sctID)
 	if err != nil {
-		switch err.(type) {
+		switch err := err.(type) {
 		case sqlite3.Error:
 			// If this is a dupe that's fine, no need to return an error
-			if err.(sqlite3.Error).Code != sqlite3.ErrConstraint {
+			if err.Code != sqlite3.ErrConstraint {
 				return err
 			}
 		default:
@@ -254,14 +254,14 @@ func (s *Storage) addSTHIfNotExists(tx *sql.Tx, sth ct.SignedTreeHead) error {
 	stmt := tx.Stmt(s.insertSTHPollination)
 	sigB64, err := sth.TreeHeadSignature.Base64String()
 	if err != nil {
-		return fmt.Errorf("Failed to base64 sth signature: %v", err)
+		return fmt.Errorf("failed to base64 sth signature: %v", err)
 	}
 	_, err = stmt.Exec(sth.Version, sth.TreeSize, sth.Timestamp, sth.SHA256RootHash.Base64String(), sigB64, sth.LogID.Base64String())
 	if err != nil {
-		switch err.(type) {
+		switch err := err.(type) {
 		case sqlite3.Error:
 			// If this is a dupe that's fine, no need to return an error
-			if err.(sqlite3.Error).Code != sqlite3.ErrConstraint {
+			if err.Code != sqlite3.ErrConstraint {
 				return err
 			}
 		default:
@@ -344,7 +344,7 @@ func getNumThings(getCount *sql.Stmt) (int64, error) {
 		return -1, err
 	}
 	if !r.Next() {
-		return -1, fmt.Errorf("Empty scan returned while querying %v", getCount)
+		return -1, fmt.Errorf("empty scan returned while querying %v", getCount)
 	}
 	var count int64
 	if err := r.Scan(&count); err != nil {

@@ -42,7 +42,7 @@ func generateCSR() ([]byte, []byte, error) {
 	glog.Infof("generating Certificate Signing Request")
 	serviceName := strings.Join([]string{prefix, "service"}, "-")
 	certRequest := csr.New()
-	certRequest.KeyRequest = &csr.BasicKeyRequest{"rsa", 2048}
+	certRequest.KeyRequest = &csr.KeyRequest{"rsa", 2048}
 	certRequest.CN = strings.Join([]string{serviceName, namespace, "svc"}, ".")
 	certRequest.Hosts = []string{
 		serviceName,

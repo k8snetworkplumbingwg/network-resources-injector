@@ -6,9 +6,12 @@ import:
   - csr
 - package: github.com/golang/glog
 - package: github.com/intel/multus-cni
-  version: ~3.2
+  version: ecc474a26425fd5e6d1b75468a479a24e58add91
   subpackages:
   - types
+- package: github.com/k8snetworkplumbingwg/network-attachment-definition-client/
+  subpackages:
+    - pkg/apis/k8s.cni.cncf.io/v1
 - package: github.com/pkg/errors
   version: ~0.8.1
 - package: k8s.io/api

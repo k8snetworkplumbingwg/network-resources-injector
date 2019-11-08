@@ -1,8 +1,8 @@
-hash: 7b1429ec896da3aa9e55fda6ea81aa71ab8f4b118214a9b3024b4b33826b6cc0
-updated: 2019-06-11T12:40:44.360436854+01:00
+hash: a2b9002c89d7ea8c925be0c2efd2b4d7c8ab069129628ab03571645e17173ea1
+updated: 2019-11-08T12:07:00.511117566-05:00
 imports:
 - name: github.com/cloudflare/cfssl
-  version: 768cd563887febaad559b511aaa5964823ccb4ab
+  version: 2185c182e6bad3bf99f55ca6f6af0027124c112d
   subpackages:
   - crypto/pkcs7
   - csr
@@ -11,7 +11,7 @@ imports:
   - helpers/derhelpers
   - log
 - name: github.com/containernetworking/cni
-  version: 07c1a6da47b7fbf8b357f4949ecce2113e598491
+  version: a2da8f8d7fd8e6dc25f336408a8ac86f050fbd88
   subpackages:
   - libcni
   - pkg/invoke
@@ -24,13 +24,15 @@ imports:
   version: 782f4967f2dc4564575ca782fe2d04090b5faca8
   subpackages:
   - spew
+- name: github.com/fsnotify/fsnotify
+  version: 4bf2d1fec78374803a39307bfb8d340688f4f28e
 - name: github.com/gogo/protobuf
   version: 342cbe0a04158f6dcb03ca0079991a51a4248c02
   subpackages:
   - proto
   - sortkeys
 - name: github.com/golang/glog
-  version: 44145f04b68cf362d9c4df2182967c2275eaefed
+  version: 23def4e6c14b4da8ac2ed8007337bc5eb5007998
 - name: github.com/golang/protobuf
   version: b4deda0973fb4c70b50d226b1af49f3da59f5265
   subpackages:
@@ -40,14 +42,14 @@ imports:
   - ptypes/duration
   - ptypes/timestamp
 - name: github.com/google/certificate-transparency-go
-  version: 1bec4527572c443752ad4f2830bef88be0533236
+  version: e800fea617e4831778235fa2ff0231d4d58a16d0
   subpackages:
   - asn1
   - tls
   - x509
   - x509/pkix
 - name: github.com/google/gofuzz
-  version: 44d81051d367757e1c7c6a5a86423ece9afcf63c
+  version: 24818f796faf91cd76ec7bddd72458fbced7a6c1
 - name: github.com/googleapis/gnostic
   version: 0c5108395e2debce0d731cf0287ddf7242066aba
   subpackages:
@@ -55,12 +57,17 @@ imports:
   - compiler
   - extensions
 - name: github.com/intel/multus-cni
-  version: 1b0b39d2f51a9e6072eaff5c35b0a7523e3a38d7
+  version: ecc474a26425fd5e6d1b75468a479a24e58add91
   subpackages:
   - logging
   - types
 - name: github.com/json-iterator/go
   version: ab8a2e0c74be9d3be70b3184d9acc634935ded82
+- name: github.com/k8snetworkplumbingwg/network-attachment-definition-client
+  version: 4c57cd5732f3a6cafdcece50d899e3ca93f3bad8
+  subpackages:
+  - artifacts
+  - pkg/apis/k8s.cni.cncf.io/v1
 - name: github.com/modern-go/concurrent
   version: bacd9c7ef1dd9b15be4a9909b8ac7a4e313eec94
 - name: github.com/modern-go/reflect2
@@ -79,16 +86,16 @@ imports:
   - pkcs12/internal/rc2
   - ssh/terminal
 - name: golang.org/x/net
-  version: 0ed95abb35c445290478a5348a7b38bb154135fd
+  version: 65e2d4e15006aab9813ff8769e768bbf4bb667a0
   subpackages:
   - context
   - html
   - html/atom
   - html/charset
+  - http/httpguts
   - http2
   - http2/hpack
   - idna
-  - lex/httplex
 - name: golang.org/x/oauth2
   version: a6bd8cefa1811bd24b86f8902872e4e8225f74c4
   subpackages:
@@ -127,7 +134,7 @@ imports:
   subpackages:
   - rate
 - name: google.golang.org/appengine
-  version: 4a4468ece617fc8205e99368fa2200e9d1fad421
+  version: 16bce7d3dc4e458f2f6f56a1349cbbfcdc8a8fdf
   subpackages:
   - internal
   - internal/base
@@ -181,7 +188,7 @@ imports:
   - storage/v1alpha1
   - storage/v1beta1
 - name: k8s.io/apimachinery
-  version: 2b1284ed4c93a43499e781493253e2ac5959c4fd
+  version: d7deff9243b165ee192f5551710ea4285dcfd615
   subpackages:
   - pkg/api/errors
   - pkg/api/meta
@@ -276,7 +283,7 @@ imports:
   - util/flowcontrol
   - util/keyutil
 - name: k8s.io/klog
-  version: 8139d8cb77af419532b33dfa7dd09fbc5f1d344f
+  version: 8e90cee79f823779174776412c13478955131846
 - name: k8s.io/utils
   version: c2654d5206da6b7b6ace12841e8f359bb89b443c
   subpackages:
@@ -287,7 +294,7 @@ imports:
   version: fd68e9863619f6ec2fdd8625fe1f02e7c877e480
 testImports:
 - name: github.com/hpcloud/tail
-  version: a1dbeea552b7c8df4b542c66073e393de198a800
+  version: a30252cb686a21eb2d0b98132633053ec2f7f1e5
   subpackages:
   - ratelimiter
   - util
@@ -328,7 +335,7 @@ testImports:
   - matchers/support/goraph/node
   - matchers/support/goraph/util
   - types
-- name: gopkg.in/fsnotify/fsnotify.v1
-  version: c2828203cd70a50dcccfb2761f8b1f8ceef9a8e9
+- name: gopkg.in/fsnotify.v1
+  version: 7be54206639f256967dd82fa767397ba5f8f48f5
 - name: gopkg.in/tomb.v1
   version: c131134a1947e9afd9cecfe11f4c6dff0732ae58
