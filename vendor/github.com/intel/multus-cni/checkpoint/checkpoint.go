@@ -21,12 +21,14 @@ import (
 
 	"github.com/intel/multus-cni/logging"
 	"github.com/intel/multus-cni/types"
+	v1 "k8s.io/api/core/v1"
 )
 
 const (
 	checkPointfile = "/var/lib/kubelet/device-plugins/kubelet_internal_checkpoint"
 )
 
+// PodDevicesEntry maps PodUID, resource name and allocated device id
 type PodDevicesEntry struct {
 	PodUID        string
 	ContainerName string
@@ -40,63 +42,58 @@ type checkpointData struct {
 	RegisteredDevices map[string][]string
 }
 
-type Data struct {
+type checkpointFileData struct {
 	Data     checkpointData
 	Checksum uint64
 }
 
-type Checkpoint interface {
-	// GetComputeDeviceMap returns an instance of a map of ResourceInfo for a PodID
-	GetComputeDeviceMap(string) (map[string]*types.ResourceInfo, error)
-}
 type checkpoint struct {
 	fileName   string
 	podEntires []PodDevicesEntry
 }
 
 // GetCheckpoint returns an instance of Checkpoint
-func GetCheckpoint() (Checkpoint, error) {
+func GetCheckpoint() (types.ResourceClient, error) {
 	logging.Debugf("GetCheckpoint(): invoked")
 	return getCheckpoint(checkPointfile)
 }
 
-func getCheckpoint(filePath string) (Checkpoint, error) {
+func getCheckpoint(filePath string) (types.ResourceClient, error) {
 	cp := &checkpoint{fileName: filePath}
 	err := cp.getPodEntries()
 	if err != nil {
 		return nil, err
 	}
-	logging.Debugf("getCheckpoint(): created checkpoint instance with file: %s", filePath)
+	logging.Debugf("getCheckpoint: created checkpoint instance with file: %s", filePath)
 	return cp, nil
 }
 
 // getPodEntries gets all Pod device allocation entries from checkpoint file
 func (cp *checkpoint) getPodEntries() error {
 
-	cpd := &Data{}
+	cpd := &checkpointFileData{}
 	rawBytes, err := ioutil.ReadFile(cp.fileName)
 	if err != nil {
-		return logging.Errorf("getPodEntries(): error reading file %s\n%v\n", checkPointfile, err)
+		return logging.Errorf("getPodEntries: error reading file %s\n%v\n", checkPointfile, err)
 	}
 
 	if err = json.Unmarshal(rawBytes, cpd); err != nil {
-		return logging.Errorf("getPodEntries(): error unmarshalling raw bytes %v", err)
+		return logging.Errorf("getPodEntries: error unmarshalling raw bytes %v", err)
 	}
 
 	cp.podEntires = cpd.Data.PodDeviceEntries
-	logging.Debugf("getPodEntries(): podEntires %+v", cp.podEntires)
+	logging.Debugf("getPodEntries: podEntires %+v", cp.podEntires)
 	return nil
 }
 
 // GetComputeDeviceMap returns an instance of a map of ResourceInfo
-func (cp *checkpoint) GetComputeDeviceMap(podID string) (map[string]*types.ResourceInfo, error) {
-
+func (cp *checkpoint) GetPodResourceMap(pod *v1.Pod) (map[string]*types.ResourceInfo, error) {
+	podID := string(pod.UID)
 	resourceMap := make(map[string]*types.ResourceInfo)
 
 	if podID == "" {
-		return nil, logging.Errorf("GetComputeDeviceMap(): invalid Pod cannot be empty")
+		return nil, logging.Errorf("GetPodResourceMap: invalid Pod cannot be empty")
 	}
-
 	for _, pod := range cp.podEntires {
 		if pod.PodUID == podID {
 			entry, ok := resourceMap[pod.ResourceName]

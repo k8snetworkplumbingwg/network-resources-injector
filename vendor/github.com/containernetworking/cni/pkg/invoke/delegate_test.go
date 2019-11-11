@@ -40,14 +40,13 @@ var _ = Describe("Delegate", func() {
 
 	BeforeEach(func() {
 		netConf, _ = json.Marshal(map[string]string{
-			"name":       "delegate-test",
-			"cniVersion": "0.4.0",
+			"cniVersion": "0.3.1",
 		})
 
 		expectedResult = &current.Result{
-			CNIVersion: "0.4.0",
+			CNIVersion: "0.3.1",
 			IPs: []*current.IPConfig{
-				{
+				&current.IPConfig{
 					Version: "4",
 					Address: net.IPNet{
 						IP:   net.ParseIP("10.1.2.3"),
@@ -72,15 +71,10 @@ var _ = Describe("Delegate", func() {
 		os.Setenv("CNI_PATH", filepath.Dir(pathToPlugin))
 		os.Setenv("CNI_NETNS", "/tmp/some/netns/path")
 		os.Setenv("CNI_IFNAME", "eth7")
-		os.Setenv("CNI_CONTAINERID", "container")
 	})
 
 	AfterEach(func() {
 		os.RemoveAll(debugFileName)
-
-		for _, k := range []string{"CNI_COMMAND", "CNI_ARGS", "CNI_PATH", "CNI_NETNS", "CNI_IFNAME"} {
-			os.Unsetenv(k)
-		}
 	})
 
 	Describe("DelegateAdd", func() {
@@ -89,7 +83,7 @@ var _ = Describe("Delegate", func() {
 		})
 
 		It("finds and execs the named plugin", func() {
-			result, err := invoke.DelegateAdd(pluginName, netConf, nil)
+			result, err := invoke.DelegateAdd(pluginName, netConf)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(Equal(expectedResult))
 
@@ -105,7 +99,7 @@ var _ = Describe("Delegate", func() {
 			})
 
 			It("aborts and returns a useful error", func() {
-				_, err := invoke.DelegateAdd(pluginName, netConf, nil)
+				_, err := invoke.DelegateAdd(pluginName, netConf)
 				Expect(err).To(MatchError("CNI_COMMAND is not ADD"))
 			})
 		})
@@ -116,46 +110,7 @@ var _ = Describe("Delegate", func() {
 			})
 
 			It("returns a useful error", func() {
-				_, err := invoke.DelegateAdd(pluginName, netConf, nil)
-				Expect(err).To(MatchError(HavePrefix("failed to find plugin")))
-			})
-		})
-	})
-
-	Describe("DelegateGet", func() {
-		BeforeEach(func() {
-			os.Setenv("CNI_COMMAND", "GET")
-		})
-
-		It("finds and execs the named plugin", func() {
-			result, err := invoke.DelegateGet(pluginName, netConf, nil)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(result).To(Equal(expectedResult))
-
-			pluginInvocation, err := debug.ReadDebug(debugFileName)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(pluginInvocation.Command).To(Equal("GET"))
-			Expect(pluginInvocation.CmdArgs.IfName).To(Equal("eth7"))
-		})
-
-		Context("if the delegation isn't part of an existing GET command", func() {
-			BeforeEach(func() {
-				os.Setenv("CNI_COMMAND", "NOPE")
-			})
-
-			It("aborts and returns a useful error", func() {
-				_, err := invoke.DelegateGet(pluginName, netConf, nil)
-				Expect(err).To(MatchError("CNI_COMMAND is not GET"))
-			})
-		})
-
-		Context("when the plugin cannot be found", func() {
-			BeforeEach(func() {
-				pluginName = "non-existent-plugin"
-			})
-
-			It("returns a useful error", func() {
-				_, err := invoke.DelegateGet(pluginName, netConf, nil)
+				_, err := invoke.DelegateAdd(pluginName, netConf)
 				Expect(err).To(MatchError(HavePrefix("failed to find plugin")))
 			})
 		})
@@ -167,7 +122,7 @@ var _ = Describe("Delegate", func() {
 		})
 
 		It("finds and execs the named plugin", func() {
-			err := invoke.DelegateDel(pluginName, netConf, nil)
+			err := invoke.DelegateDel(pluginName, netConf)
 			Expect(err).NotTo(HaveOccurred())
 
 			pluginInvocation, err := debug.ReadDebug(debugFileName)
@@ -182,7 +137,7 @@ var _ = Describe("Delegate", func() {
 			})
 
 			It("aborts and returns a useful error", func() {
-				err := invoke.DelegateDel(pluginName, netConf, nil)
+				err := invoke.DelegateDel(pluginName, netConf)
 				Expect(err).To(MatchError("CNI_COMMAND is not DEL"))
 			})
 		})
@@ -193,7 +148,7 @@ var _ = Describe("Delegate", func() {
 			})
 
 			It("returns a useful error", func() {
-				err := invoke.DelegateDel(pluginName, netConf, nil)
+				err := invoke.DelegateDel(pluginName, netConf)
 				Expect(err).To(MatchError(HavePrefix("failed to find plugin")))
 			})
 		})

@@ -30,7 +30,6 @@ import (
 type nilLimiter struct{}
 
 func (l *nilLimiter) Wait() {
-	return
 }
 
 func newNilLimiter() *nilLimiter {
@@ -49,8 +48,8 @@ func (rc bytesReadCloser) Close() error {
 // PEM format for testing purposes.  Any errors in the PEM decoding process are
 // reported to the testing framework.
 func GetTestCertificateFromPEM(t *testing.T, pemBytes string) *x509.Certificate {
-	cert, err := x509util.CertificateFromPEM(pemBytes)
-	if err != nil {
+	cert, err := x509util.CertificateFromPEM([]byte(pemBytes))
+	if x509.IsFatal(err) {
 		t.Errorf("Failed to parse leaf: %s", err)
 	}
 	return cert
@@ -180,7 +179,7 @@ NextRoot:
 	}
 }
 
-func extractTestChain(t *testing.T, i int, testChain []string) []*x509.Certificate {
+func extractTestChain(t *testing.T, _ int, testChain []string) []*x509.Certificate {
 	var chain []*x509.Certificate
 	for _, cert := range testChain {
 		chain = append(chain, GetTestCertificateFromPEM(t, cert))
@@ -222,7 +221,7 @@ func stringRootsToJSON(roots []string) []byte {
 	}
 	var r Roots
 	for _, root := range roots {
-		cert, err := x509util.CertificateFromPEM(root)
+		cert, err := x509util.CertificateFromPEM([]byte(root))
 		if err != nil {
 			log.Fatalf("Failed to parse certificate: %s", err)
 		}

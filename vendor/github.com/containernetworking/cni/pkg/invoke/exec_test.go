@@ -29,7 +29,7 @@ import (
 
 var _ = Describe("Executing a plugin, unit tests", func() {
 	var (
-		pluginExec     invoke.Exec
+		pluginExec     *invoke.PluginExec
 		rawExec        *fakes.RawExec
 		versionDecoder *fakes.VersionDecoder
 
@@ -45,10 +45,7 @@ var _ = Describe("Executing a plugin, unit tests", func() {
 		versionDecoder = &fakes.VersionDecoder{}
 		versionDecoder.DecodeCall.Returns.PluginInfo = version.PluginSupports("0.42.0")
 
-		pluginExec = &struct {
-			*fakes.RawExec
-			*fakes.VersionDecoder
-		}{
+		pluginExec = &invoke.PluginExec{
 			RawExec:        rawExec,
 			VersionDecoder: versionDecoder,
 		}
@@ -60,7 +57,7 @@ var _ = Describe("Executing a plugin, unit tests", func() {
 
 	Describe("returning a result", func() {
 		It("unmarshals the result bytes into the Result type", func() {
-			r, err := invoke.ExecPluginWithResult(pluginPath, netconf, cniargs, pluginExec)
+			r, err := pluginExec.WithResult(pluginPath, netconf, cniargs)
 			Expect(err).NotTo(HaveOccurred())
 
 			result, err := current.GetResult(r)
@@ -70,7 +67,7 @@ var _ = Describe("Executing a plugin, unit tests", func() {
 		})
 
 		It("passes its arguments through to the rawExec", func() {
-			invoke.ExecPluginWithResult(pluginPath, netconf, cniargs, pluginExec)
+			pluginExec.WithResult(pluginPath, netconf, cniargs)
 			Expect(rawExec.ExecPluginCall.Received.PluginPath).To(Equal(pluginPath))
 			Expect(rawExec.ExecPluginCall.Received.StdinData).To(Equal(netconf))
 			Expect(rawExec.ExecPluginCall.Received.Environ).To(Equal([]string{"SOME=ENV"}))
@@ -81,23 +78,15 @@ var _ = Describe("Executing a plugin, unit tests", func() {
 				rawExec.ExecPluginCall.Returns.Error = errors.New("banana")
 			})
 			It("returns the error", func() {
-				_, err := invoke.ExecPluginWithResult(pluginPath, netconf, cniargs, pluginExec)
+				_, err := pluginExec.WithResult(pluginPath, netconf, cniargs)
 				Expect(err).To(MatchError("banana"))
 			})
-		})
-
-		It("returns an error using the default exec interface", func() {
-			// pluginPath should not exist on-disk so we expect an error.
-			// This test simply tests that the default exec handler
-			// is run when the exec interface is nil.
-			_, err := invoke.ExecPluginWithResult(pluginPath, netconf, cniargs, nil)
-			Expect(err).To(HaveOccurred())
 		})
 	})
 
 	Describe("without returning a result", func() {
 		It("passes its arguments through to the rawExec", func() {
-			invoke.ExecPluginWithoutResult(pluginPath, netconf, cniargs, pluginExec)
+			pluginExec.WithoutResult(pluginPath, netconf, cniargs)
 			Expect(rawExec.ExecPluginCall.Received.PluginPath).To(Equal(pluginPath))
 			Expect(rawExec.ExecPluginCall.Received.StdinData).To(Equal(netconf))
 			Expect(rawExec.ExecPluginCall.Received.Environ).To(Equal([]string{"SOME=ENV"}))
@@ -108,17 +97,9 @@ var _ = Describe("Executing a plugin, unit tests", func() {
 				rawExec.ExecPluginCall.Returns.Error = errors.New("banana")
 			})
 			It("returns the error", func() {
-				err := invoke.ExecPluginWithoutResult(pluginPath, netconf, cniargs, pluginExec)
+				err := pluginExec.WithoutResult(pluginPath, netconf, cniargs)
 				Expect(err).To(MatchError("banana"))
 			})
-		})
-
-		It("returns an error using the default exec interface", func() {
-			// pluginPath should not exist on-disk so we expect an error.
-			// This test simply tests that the default exec handler
-			// is run when the exec interface is nil.
-			err := invoke.ExecPluginWithoutResult(pluginPath, netconf, cniargs, nil)
-			Expect(err).To(HaveOccurred())
 		})
 	})
 
@@ -128,7 +109,7 @@ var _ = Describe("Executing a plugin, unit tests", func() {
 		})
 
 		It("execs the plugin with the command VERSION", func() {
-			invoke.GetVersionInfo(pluginPath, pluginExec)
+			pluginExec.GetVersionInfo(pluginPath)
 			Expect(rawExec.ExecPluginCall.Received.PluginPath).To(Equal(pluginPath))
 			Expect(rawExec.ExecPluginCall.Received.Environ).To(ContainElement("CNI_COMMAND=VERSION"))
 			expectedStdin, _ := json.Marshal(map[string]string{"cniVersion": version.Current()})
@@ -136,7 +117,7 @@ var _ = Describe("Executing a plugin, unit tests", func() {
 		})
 
 		It("decodes and returns the version info", func() {
-			versionInfo, err := invoke.GetVersionInfo(pluginPath, pluginExec)
+			versionInfo, err := pluginExec.GetVersionInfo(pluginPath)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(versionInfo.SupportedVersions()).To(Equal([]string{"0.42.0"}))
 			Expect(versionDecoder.DecodeCall.Received.JSONBytes).To(MatchJSON(`{ "some": "version-info" }`))
@@ -147,7 +128,7 @@ var _ = Describe("Executing a plugin, unit tests", func() {
 				rawExec.ExecPluginCall.Returns.Error = errors.New("banana")
 			})
 			It("returns the error", func() {
-				_, err := invoke.GetVersionInfo(pluginPath, pluginExec)
+				_, err := pluginExec.GetVersionInfo(pluginPath)
 				Expect(err).To(MatchError("banana"))
 			})
 		})
@@ -158,13 +139,13 @@ var _ = Describe("Executing a plugin, unit tests", func() {
 			})
 
 			It("interprets the error as a 0.1.0 version", func() {
-				versionInfo, err := invoke.GetVersionInfo(pluginPath, pluginExec)
+				versionInfo, err := pluginExec.GetVersionInfo(pluginPath)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(versionInfo.SupportedVersions()).To(ConsistOf("0.1.0"))
 			})
 
 			It("sets dummy values for env vars required by very old plugins", func() {
-				invoke.GetVersionInfo(pluginPath, pluginExec)
+				pluginExec.GetVersionInfo(pluginPath)
 
 				env := rawExec.ExecPluginCall.Received.Environ
 				Expect(env).To(ContainElement("CNI_NETNS=dummy"))

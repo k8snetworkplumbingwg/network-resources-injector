@@ -18,6 +18,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"math/big"
 	"net"
 	"net/url"
@@ -30,6 +31,7 @@ import (
 
 	"github.com/google/certificate-transparency-go/asn1"
 	"github.com/google/certificate-transparency-go/x509/pkix"
+	"golang.org/x/crypto/ed25519"
 )
 
 func TestParsePKCS1PrivateKey(t *testing.T) {
@@ -77,6 +79,31 @@ func TestParsePKIXPublicKey(t *testing.T) {
 		t.Errorf("Reserialization of public key didn't match. got %x, want %x", pubBytes2, block.Bytes)
 	}
 }
+
+func TestParsePKIXPublicKeyEd25519(t *testing.T) {
+	block, _ := pem.Decode([]byte(pemPublicKeyEd25519))
+	pub, err := ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		t.Fatalf("ParsePKIXPublicKey(Ed25519)=nil,%v; want _,nil", err)
+	}
+	edPub, ok := pub.(ed25519.PublicKey)
+	if !ok {
+		t.Fatalf("ParsePKIXPublicKey.(ed25519.PublicKey)=nil,%v; want _,true", ok)
+	}
+
+	pubBytes2, err := MarshalPKIXPublicKey(edPub)
+	if err != nil {
+		t.Fatalf("MarshalPKIXPublicKey(Ed25519)=nil,%v; want _,nil", err)
+	}
+	if !bytes.Equal(pubBytes2, block.Bytes) {
+		t.Errorf("MarshalPKIXPublicKey(Ed25519)=%x; want %x", pubBytes2, block.Bytes)
+	}
+}
+
+// From RFC 8410 section 10.1.
+var pemPublicKeyEd25519 = `-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEAGb9ECWmEzf6FQbrBZ9w7lshQhqowtrbLDFw4rXAxZuE=
+-----END PUBLIC KEY-----`
 
 var pemPublicKey = `-----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3VoPN9PKUjKFLMwOge6+
@@ -386,7 +413,7 @@ func TestMatchIP(t *testing.T) {
 func TestCertificateParse(t *testing.T) {
 	s, _ := hex.DecodeString(certBytes)
 	certs, err := ParseCertificates(s)
-	if err != nil {
+	if IsFatal(err) {
 		t.Error(err)
 	}
 	if len(certs) != 2 {
@@ -662,7 +689,7 @@ func TestCreateSelfSignedCertificate(t *testing.T) {
 			UnknownExtKeyUsage: testUnknownExtKeyUsage,
 
 			BasicConstraintsValid: true,
-			IsCA: true,
+			IsCA:                  true,
 
 			OCSPServer:            []string{"http://ocsp.example.com"},
 			IssuingCertificateURL: []string{"http://crt.example.com/ca1.crt"},
@@ -1069,23 +1096,121 @@ qsGZWxzFvvkXUkQSl0dQQ5jO/FtUJcAVXVVp20LxPemfatAHpW31WdJYeWSQWky2
 +f9b5TXKXVyjlUL7uHxowWrT2AtTchDH22wTEtqLEF9Z3Q==
 -----END CERTIFICATE-----`
 
+// openssl req -newkey rsa:2048 -keyout test.key -sha256 -sigopt \
+// rsa_padding_mode:pss -sigopt rsa_pss_saltlen:32 -sigopt rsa_mgf1_md:sha256 \
+// -x509 -days 3650 -nodes -subj '/C=US/ST=CA/L=SF/O=Test/CN=Test' -out \
+// test.pem
+var rsaPSSSelfSignedOpenSSL110PEM = `-----BEGIN CERTIFICATE-----
+MIIDwDCCAnigAwIBAgIJAM9LAMHTE5xpMD0GCSqGSIb3DQEBCjAwoA0wCwYJYIZI
+AWUDBAIBoRowGAYJKoZIhvcNAQEIMAsGCWCGSAFlAwQCAaIDAgEgMEUxCzAJBgNV
+BAYTAlVTMQswCQYDVQQIDAJDQTELMAkGA1UEBwwCU0YxDTALBgNVBAoMBFRlc3Qx
+DTALBgNVBAMMBFRlc3QwHhcNMTgwMjIyMjIxMzE4WhcNMjgwMjIwMjIxMzE4WjBF
+MQswCQYDVQQGEwJVUzELMAkGA1UECAwCQ0ExCzAJBgNVBAcMAlNGMQ0wCwYDVQQK
+DARUZXN0MQ0wCwYDVQQDDARUZXN0MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIB
+CgKCAQEA4Zrsydod+GoTAJLLutWNF87qhhVPBsK1zB1Gj+NAAe4+VbrZ1E41H1wp
+qITx7DA8DRtJEf+NqrTAnAdZWBG/tAOA5LfXVax0ZSQtLnYLSeylLoMtDyY3eFAj
+TmuTOoyVy6raktowCnHCh01NsstqqTfrx6SbmzOmDmKTkq/I+7K0MCVsn41xRDVM
++ShD0WGFGioEGoiWnFSWupxJDA3Q6jIDEygVwNKHwnhv/2NgG2kqZzrZSQA67en0
+iKAXtoDNPpmyD5oS9YbEJ+2Nbm7oLeON30i6kZvXKIzJXx+UWViazHZqnsi5rQ8G
+RHF+iVFXsqd0MzDKmkKOT5FDhrsbKQIDAQABo1MwUTAdBgNVHQ4EFgQU9uFY/nlg
+gLH00NBnr/o7QvpN9ugwHwYDVR0jBBgwFoAU9uFY/nlggLH00NBnr/o7QvpN9ugw
+DwYDVR0TAQH/BAUwAwEB/zA9BgkqhkiG9w0BAQowMKANMAsGCWCGSAFlAwQCAaEa
+MBgGCSqGSIb3DQEBCDALBglghkgBZQMEAgGiAwIBIAOCAQEAhJzpwxBNGKvzKWDe
+WLqv6RMrl/q4GcH3b7M9wjxe0yOm4F+Tb2zJ7re4h+D39YkJf8cX1NV9UQVu6z4s
+Fvo2kmlR0qZOXAg5augmCQ1xS0WHFoF6B52anNzHkZQbAIYJ3kGoFsUHzs7Sz7F/
+656FsRpHA9UzJQ3avPPMrA4Y4aoJ7ANJ6XIwTrdWrhULOVuvYRLCl4CdTVztVFX6
+wxX8nS1ISYd8jXPUMgsBKVbWufvLoIymMJW8CZbpprVZel5zFn0bmPrON8IHS30w
+Gs+ITJjKEnZgXmAQ25SLKVzkZkBcGANs2GsdHNJ370Puisy0FIPD2NXR5uASAf7J
++w9fjQ==
+-----END CERTIFICATE-----`
+
 func TestRSAPSSSelfSigned(t *testing.T) {
-	der, _ := pem.Decode([]byte(rsaPSSSelfSignedPEM))
-	if der == nil {
-		t.Fatal("Failed to find PEM block")
-	}
+	for i, pemBlock := range []string{rsaPSSSelfSignedPEM, rsaPSSSelfSignedOpenSSL110PEM} {
+		der, _ := pem.Decode([]byte(pemBlock))
+		if der == nil {
+			t.Errorf("#%d: failed to find PEM block", i)
+			continue
+		}
 
-	cert, err := ParseCertificate(der.Bytes)
-	if err != nil {
-		t.Fatal(err)
-	}
+		cert, err := ParseCertificate(der.Bytes)
+		if err != nil {
+			t.Errorf("#%d: failed to parse: %s", i, err)
+			continue
+		}
 
-	if err = cert.CheckSignatureFrom(cert); err != nil {
-		t.Fatal(err)
+		if err = cert.CheckSignatureFrom(cert); err != nil {
+			t.Errorf("#%d: signature check failed: %s", i, err)
+			continue
+		}
 	}
 }
 
-const pemCertificate = `-----BEGIN CERTIFICATE-----
+// Valid EKCert (from an Infineon TPM1.2)  with RSAES-OAEP Public Key.
+// TPM1.2 uses RSA keys with OAEP padding (SHA1).
+// The hardware only supports SHA1 so manufacturers have since switched
+// to using rsaEncryption keys but millions of certificates still exist
+// that have this type of key.
+var oaepCertPEM = `-----BEGIN CERTIFICATE-----
+MIIFbjCCBFagAwIBAgIEZPW9pTANBgkqhkiG9w0BAQUFADB3MQswCQYDVQQGEwJE
+RTEPMA0GA1UECBMGU2F4b255MSEwHwYDVQQKExhJbmZpbmVvbiBUZWNobm9sb2dp
+ZXMgQUcxDDAKBgNVBAsTA0FJTTEmMCQGA1UEAxMdSUZYIFRQTSBFSyBJbnRlcm1l
+ZGlhdGUgQ0EgMjAwHhcNMTUwOTIxMjEyOTI4WhcNMjUwOTIxMjEyOTI4WjAAMIIB
+NzAiBgkqhkiG9w0BAQcwFaITMBEGCSqGSIb3DQEBCQQEVENQQQOCAQ8AMIIBCgKC
+AQEAjnmDEFBjo/HC5318i09BHbnHbxE2bMuxF1cAH6UYBbu/aLbczZrSioLGqDHh
+WR8GGBwuMowmHPmhT/FwTcMmHMFtp1F2AUGWkzCnWz/Frhhax21japejOYOL0EKq
+fFmZ9j+UbGmHsOi+j1kI0IVj9ivG7pUQ42dSvTsue1UoG8kqjcyLqKMNaqp1gLZy
+2DgCRJ00v+oENO3qTbw6myAfPeC/WrLKlqUlT052pYrcjTvDhb6U6T4AUuQGbyOK
+nBGV6qzaAqbceDkwYzQAVOPOmXVKh3DI78ykWtj8mZ96qmeoqDlgFB5fS4ktOvMz
+8JttE+YJAODqi9O17qMPTyuImwIDAQABo4ICYjCCAl4wVQYDVR0RAQH/BEswSaRH
+MEUxFjAUBgVngQUCAQwLaWQ6NDk0NjU4MDAxFzAVBgVngQUCAgwMU0xCOTY2MHh4
+MS4yMRIwEAYFZ4EFAgMMB2lkOjA0MjgwDAYDVR0TAQH/BAIwADCBvAYDVR0gAQH/
+BIGxMIGuMIGrBgtghkgBhvhFAQcvATCBmzA5BggrBgEFBQcCARYtaHR0cDovL3d3
+dy52ZXJpc2lnbi5jb20vcmVwb3NpdG9yeS9pbmRleC5odG1sMF4GCCsGAQUFBwIC
+MFIeUABUAEMAUABBACAAVAByAHUAcwB0AGUAZAAgAFAAbABhAHQAZgBvAHIAbQAg
+AE0AbwBkAHUAbABlACAARQBuAGQAbwByAHMAZQBtAGUAbgB0MIGhBgNVHSMEgZkw
+gZaAFI/9R4gOI5o6OiDeE+3xAeiCqdIdoXukeTB3MQswCQYDVQQGEwJERTEPMA0G
+A1UECBMGU2F4b255MSEwHwYDVQQKExhJbmZpbmVvbiBUZWNobm9sb2dpZXMgQUcx
+DDAKBgNVBAsTA0FJTTEmMCQGA1UEAxMdSUZYIFRQTSBFSyBJbnRlcm1lZGlhdGUg
+Q0EgMjCCAQUwgZMGA1UdCQSBizCBiDA6BgNVBDQxMzALMAkGBSsOAwIaBQAwJDAi
+BgkqhkiG9w0BAQcwFaITMBEGCSqGSIb3DQEBCQQEVENQQTAWBgVngQUCEDENMAsM
+AzEuMgIBAgIBAzAyBgVngQUCEjEpMCcBAf+gAwoBAaEDCgEAogMKAQCjEDAOFgMz
+LjEKAQQKAQEBAf8BAf8wDQYJKoZIhvcNAQEFBQADggEBADsl05WM8IssMs77QFcP
+hF4l+pj9OKR76MFuTvZj2PBXgk/1UAUrSjOONTsIv+cDZM2geWHT9Ptcv1SElzia
+WrWcNGnRS29b/cJ9s90MvSGsgYpkoUAyzUM6K/+5ObX1RVXCtokrX2R548OL1LMC
+g9Lo7lfsrXedrpC9nWBSrWvz77sw9jngOwojn1OaR2sSlUC8mAbi3HAR0mXcqKlT
+Aaq6hytOF2vbZw5lt1Cwr9wsqXs/C+9VhirhNb2GsdOijU7t/l7kRaPx1lu60K2u
+SZmeYT6rsTMWZGHPRxRt4Hin1/VQlAoaR17Mg07nhKam5C+krXhp740rIlHIMO+z
+hJY=
+-----END CERTIFICATE-----`
+
+func TestParseCertificateWithRSAESOAEPPublicKey(t *testing.T) {
+	wantKey := &rsa.PublicKey{
+		E: 65537,
+		N: bigFromHexString("8e7983105063a3f1c2e77d7c8b4f411db9c76f11366ccbb11757001fa51805bbbf68b6dccd9ad28a82c6a831e1591f06181c2e328c261cf9a14ff1704dc3261cc16da751760141969330a75b3fc5ae185ac76d636a97a339838bd042aa7c5999f63f946c6987b0e8be8f5908d08563f62bc6ee9510e36752bd3b2e7b55281bc92a8dcc8ba8a30d6aaa7580b672d83802449d34bfea0434edea4dbc3a9b201f3de0bf5ab2ca96a5254f4e76a58adc8d3bc385be94e93e0052e4066f238a9c1195eaacda02a6dc78393063340054e3ce99754a8770c8efcca45ad8fc999f7aaa67a8a83960141e5f4b892d3af333f09b6d13e60900e0ea8bd3b5eea30f4f2b889b"),
+	}
+	der, _ := pem.Decode([]byte(oaepCertPEM))
+	if der == nil {
+		t.Fatalf("Failed to decode PEM cert")
+	}
+	cert, err := ParseCertificate(der.Bytes)
+	if err != nil {
+		t.Fatalf("Failed to parse certificate: %s", err)
+	}
+	if cert.PublicKeyAlgorithm != RSAESOAEP {
+		t.Errorf("Parsed key algorithm was not RSAESOAEP")
+	}
+	parsedKey, ok := cert.PublicKey.(*rsa.PublicKey)
+	if !ok {
+		t.Fatalf("Parsed key was not an RSA key: %s", err)
+	}
+	if wantKey.E != parsedKey.E ||
+		wantKey.N.Cmp(parsedKey.N) != 0 {
+		t.Fatal("Parsed key differs from expected key")
+	}
+}
+
+const (
+	pemCertificate = `-----BEGIN CERTIFICATE-----
 MIIDATCCAemgAwIBAgIRAKQkkrFx1T/dgB/Go/xBM5swDQYJKoZIhvcNAQELBQAw
 EjEQMA4GA1UEChMHQWNtZSBDbzAeFw0xNjA4MTcyMDM2MDdaFw0xNzA4MTcyMDM2
 MDdaMBIxEDAOBgNVBAoTB0FjbWUgQ28wggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAw
@@ -1104,6 +1229,64 @@ fnnktsblSUV4lRCit0ymC7Ojhe+gzCCwkgs5kDzVVag+tnl/0e2DloIjASwOhpbH
 KVcg7fBd484ht/sS+l0dsB4KDOSpd8JzVDMF8OZqlaydizoJO0yWr9GbCN1+OKq5
 EhLrEqU=
 -----END CERTIFICATE-----`
+	pemPrecertificate = `-----BEGIN CERTIFICATE-----
+MIIC3zCCAkigAwIBAgIBBzANBgkqhkiG9w0BAQUFADBVMQswCQYDVQQGEwJHQjEk
+MCIGA1UEChMbQ2VydGlmaWNhdGUgVHJhbnNwYXJlbmN5IENBMQ4wDAYDVQQIEwVX
+YWxlczEQMA4GA1UEBxMHRXJ3IFdlbjAeFw0xMjA2MDEwMDAwMDBaFw0yMjA2MDEw
+MDAwMDBaMFIxCzAJBgNVBAYTAkdCMSEwHwYDVQQKExhDZXJ0aWZpY2F0ZSBUcmFu
+c3BhcmVuY3kxDjAMBgNVBAgTBVdhbGVzMRAwDgYDVQQHEwdFcncgV2VuMIGfMA0G
+CSqGSIb3DQEBAQUAA4GNADCBiQKBgQC+75jnwmh3rjhfdTJaDB0ym+3xj6r015a/
+BH634c4VyVui+A7kWL19uG+KSyUhkaeb1wDDjpwDibRc1NyaEgqyHgy0HNDnKAWk
+EM2cW9tdSSdyba8XEPYBhzd+olsaHjnu0LiBGdwVTcaPfajjDK8VijPmyVCfSgWw
+FAn/Xdh+tQIDAQABo4HBMIG+MB0GA1UdDgQWBBQgMVQa8lwF/9hli2hDeU9ekDb3
+tDB9BgNVHSMEdjB0gBRfnYgNyHPmVNT4DdjmsMEktEfDVaFZpFcwVTELMAkGA1UE
+BhMCR0IxJDAiBgNVBAoTG0NlcnRpZmljYXRlIFRyYW5zcGFyZW5jeSBDQTEOMAwG
+A1UECBMFV2FsZXMxEDAOBgNVBAcTB0VydyBXZW6CAQAwCQYDVR0TBAIwADATBgor
+BgEEAdZ5AgQDAQH/BAIFADANBgkqhkiG9w0BAQUFAAOBgQACocOeAVr1Tf8CPDNg
+h1//NDdVLx8JAb3CVDFfM3K3I/sV+87MTfRxoM5NjFRlXYSHl/soHj36u0YtLGhL
+BW/qe2O0cP8WbjLURgY1s9K8bagkmyYw5x/DTwjyPdTuIo+PdPY9eGMR3QpYEUBf
+kGzKLC0+6/yBmWTr2M98CIY/vg==
+-----END CERTIFICATE-----`
+)
+
+func TestIsPrecertificate(t *testing.T) {
+	tests := []struct {
+		desc    string
+		certPEM string
+		want    bool
+	}{
+		{
+			desc:    "certificate",
+			certPEM: pemCertificate,
+			want:    false,
+		},
+		{
+			desc:    "precertificate",
+			certPEM: pemPrecertificate,
+			want:    true,
+		},
+		{
+			desc:    "nil",
+			certPEM: "",
+			want:    false,
+		},
+	}
+
+	for _, test := range tests {
+		var cert *Certificate
+		if test.certPEM != "" {
+			var err error
+			cert, err = certificateFromPEM(test.certPEM)
+			if err != nil {
+				t.Errorf("%s: error parsing certificate: %s", test.desc, err)
+				continue
+			}
+		}
+		if got := cert.IsPrecertificate(); got != test.want {
+			t.Errorf("%s: c.IsPrecertificate() = %t, want %t", test.desc, got, test.want)
+		}
+	}
+}
 
 func TestCRLCreation(t *testing.T) {
 	block, _ := pem.Decode([]byte(pemPrivateKey))
@@ -1230,6 +1413,26 @@ func TestNonFatalErrors(t *testing.T) {
 	}
 }
 
+func TestIsFatal(t *testing.T) {
+	tests := []struct {
+		err  error
+		want bool
+	}{
+		{err: errors.New("normal error"), want: true},
+		{err: NonFatalErrors{}, want: false},
+		{err: nil, want: false},
+		{err: &Errors{}, want: false},
+		{err: &Errors{Errs: []Error{{ID: 1, Summary: "test", Fatal: true}}}, want: true},
+		{err: &Errors{Errs: []Error{{ID: 1, Summary: "test", Fatal: false}}}, want: false},
+	}
+	for _, test := range tests {
+		got := IsFatal(test.err)
+		if got != test.want {
+			t.Errorf("IsFatal(%T %v)=%v, want %v", test.err, test.err, got, test.want)
+		}
+	}
+}
+
 const (
 	tbsNoPoison = "30820245a003020102020842822a5b866fbfeb300d06092a864886f70d01010b" +
 		"05003071310b3009060355040613024742310f300d060355040813064c6f6e64" +
@@ -1338,8 +1541,8 @@ func TestRemoveCTPoison(t *testing.T) {
 	}{
 		{name: "invalid-der", tbs: "01020304", errstr: "failed to parse"},
 		{name: "trailing-data", tbs: tbsPoisonMiddle + "01020304", errstr: "trailing data"},
-		{name: "no-poison-ext", tbs: tbsNoPoison, errstr: "no CT poison extension present"},
-		{name: "two-poison-exts", tbs: tbsPoisonTwice, errstr: "multiple CT poison extensions present"},
+		{name: "no-poison-ext", tbs: tbsNoPoison, errstr: "no extension of specified type present"},
+		{name: "two-poison-exts", tbs: tbsPoisonTwice, errstr: "multiple extensions of specified type present"},
 		{name: "poison-first", tbs: tbsPoisonFirst, want: tbsNoPoison},
 		{name: "poison-last", tbs: tbsPoisonLast, want: tbsNoPoison},
 		{name: "poison-middle", tbs: tbsPoisonMiddle, want: tbsNoPoison},
@@ -1513,6 +1716,7 @@ func TestBuildPrecertTBS(t *testing.T) {
 }
 
 func TestImports(t *testing.T) {
+	t.Skip("Import test skipped for forked codebase")
 	//	testenv.MustHaveGoRun(t)
 
 	// Replace testenv.GoToolPath(t) with "go" for use outside of Go repo.
@@ -1629,8 +1833,9 @@ func TestCertificateRequestOverrides(t *testing.T) {
 		// template.
 		ExtraExtensions: []pkix.Extension{
 			{
-				Id:    OIDExtensionSubjectAltName,
-				Value: sanContents,
+				Id:       OIDExtensionSubjectAltName,
+				Value:    sanContents,
+				Critical: true,
 			},
 		},
 	}
@@ -1639,6 +1844,10 @@ func TestCertificateRequestOverrides(t *testing.T) {
 
 	if len(csr.DNSNames) != 1 || csr.DNSNames[0] != "foo.example.com" {
 		t.Errorf("Extension did not override template. Got %v\n", csr.DNSNames)
+	}
+
+	if len(csr.Extensions) != 1 || !csr.Extensions[0].Id.Equal(OIDExtensionSubjectAltName) || !csr.Extensions[0].Critical {
+		t.Errorf("SAN extension was not faithfully copied, got %#v", csr.Extensions)
 	}
 
 	// If there is already an attribute with X.509 extensions then the
@@ -1783,7 +1992,7 @@ func TestMaxPathLen(t *testing.T) {
 		NotAfter:  time.Unix(100000, 0),
 
 		BasicConstraintsValid: true,
-		IsCA: true,
+		IsCA:                  true,
 	}
 
 	cert1 := serialiseAndParse(t, template)
@@ -1824,8 +2033,8 @@ func TestNoAuthorityKeyIdInSelfSignedCert(t *testing.T) {
 		NotAfter:  time.Unix(100000, 0),
 
 		BasicConstraintsValid: true,
-		IsCA:         true,
-		SubjectKeyId: []byte{1, 2, 3, 4},
+		IsCA:                  true,
+		SubjectKeyId:          []byte{1, 2, 3, 4},
 	}
 
 	if cert := serialiseAndParse(t, template); len(cert.AuthorityKeyId) != 0 {
@@ -2040,9 +2249,42 @@ func TestSystemCertPool(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("not implemented on Windows; Issue 16736, 18609")
 	}
-	_, err := SystemCertPool()
+	a, err := SystemCertPool()
 	if err != nil {
 		t.Fatal(err)
+	}
+	b, err := SystemCertPool()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(a, b) {
+		t.Fatal("two calls to SystemCertPool had different results")
+	}
+	if ok := b.AppendCertsFromPEM([]byte(`
+-----BEGIN CERTIFICATE-----
+MIIDBjCCAe6gAwIBAgIRANXM5I3gjuqDfTp/PYrs+u8wDQYJKoZIhvcNAQELBQAw
+EjEQMA4GA1UEChMHQWNtZSBDbzAeFw0xODAzMjcxOTU2MjFaFw0xOTAzMjcxOTU2
+MjFaMBIxEDAOBgNVBAoTB0FjbWUgQ28wggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAw
+ggEKAoIBAQDK+9m3rjsO2Djes6bIYQZ3eV29JF09ZrjOrEHLtaKrD6/acsoSoTsf
+cQr+rzzztdB5ijWXCS64zo/0OiqBeZUNZ67jVdToa9qW5UYe2H0Y+ZNdfA5GYMFD
+yk/l3/uBu3suTZPfXiW2TjEi27Q8ruNUIZ54DpTcs6y2rBRFzadPWwn/VQMlvRXM
+jrzl8Y08dgnYmaAHprxVzwMXcQ/Brol+v9GvjaH1DooHqkn8O178wsPQNhdtvN01
+IXL46cYdcUwWrE/GX5u+9DaSi+0KWxAPQ+NVD5qUI0CKl4714yGGh7feXMjJdHgl
+VG4QJZlJvC4FsURgCHJT6uHGIelnSwhbAgMBAAGjVzBVMA4GA1UdDwEB/wQEAwIF
+oDATBgNVHSUEDDAKBggrBgEFBQcDATAMBgNVHRMBAf8EAjAAMCAGA1UdEQQZMBeC
+FVRlc3RTeXN0ZW1DZXJ0UG9vbC5nbzANBgkqhkiG9w0BAQsFAAOCAQEAwuSRx/VR
+BKh2ICxZjL6jBwk/7UlU1XKbhQD96RqkidDNGEc6eLZ90Z5XXTurEsXqdm5jQYPs
+1cdcSW+fOSMl7MfW9e5tM66FaIPZl9rKZ1r7GkOfgn93xdLAWe8XHd19xRfDreub
+YC8DVqgLASOEYFupVSl76ktPfxkU5KCvmUf3P2PrRybk1qLGFytGxfyice2gHSNI
+gify3K/+H/7wCkyFW4xYvzl7WW4mXxoqPRPjQt1J423DhnnQ4G1P8V/vhUpXNXOq
+N9IEPnWuihC09cyx/WMQIUlWnaQLHdfpPS04Iez3yy2PdfXJzwfPrja7rNE+skK6
+pa/O1nF0AfWOpw==
+-----END CERTIFICATE-----
+	`)); !ok {
+		t.Fatal("AppendCertsFromPEM failed")
+	}
+	if reflect.DeepEqual(a, b) {
+		t.Fatal("changing one pool modified the other")
 	}
 }
 
@@ -2085,7 +2327,7 @@ func TestPKIXNameString(t *testing.T) {
 		t.Fatal(err)
 	}
 	certs, err := ParseCertificates(pem)
-	if err != nil {
+	if IsFatal(err) {
 		t.Fatal(err)
 	}
 
@@ -2281,7 +2523,7 @@ func TestAdditionFieldsInGeneralSubtree(t *testing.T) {
 	// GeneralSubtree structure. This tests that such certificates can be
 	// parsed.
 	block, _ := pem.Decode([]byte(additionalGeneralSubtreePEM))
-	if _, err := ParseCertificate(block.Bytes); err != nil {
+	if _, err := ParseCertificate(block.Bytes); IsFatal(err) {
 		t.Fatalf("failed to parse certificate: %s", err)
 	}
 }
@@ -2366,5 +2608,44 @@ func TestMultipleURLsInCRLDP(t *testing.T) {
 	}
 	if got := cert.CRLDistributionPoints; !reflect.DeepEqual(got, want) {
 		t.Errorf("CRL distribution points = %#v, want #%v", got, want)
+	}
+}
+
+func TestParseCertificateFail(t *testing.T) {
+	var tests = []struct {
+		desc      string
+		in        string
+		wantErr   string
+		wantFatal bool
+	}{
+		{desc: "SubjectInfoEmpty", in: "testdata/invalid/xf-ext-subject-info-empty.pem", wantErr: "empty SubjectInfoAccess"},
+		{desc: "RSAParamsNonNULL", in: "testdata/invalid/xf-pubkey-rsa-param-nonnull.pem", wantErr: "RSA key missing NULL parameters"},
+		{desc: "EmptyEKU", in: "testdata/invalid/xf-ext-extended-key-usage-empty.pem", wantErr: "empty ExtendedKeyUsage"},
+		{desc: "EKUEmptyOID", in: "testdata/invalid/xf-ext-extended-key-usage-empty-oid.pem", wantErr: "zero length OBJECT IDENTIFIER"},
+		{desc: "SECp192r1TooShort", in: "testdata/invalid/xf-pubkey-ecdsa-secp192r1.pem", wantErr: "insecure curve (secp192r1)"},
+		{desc: "SerialNumIntegerNotMinimal", in: "testdata/invalid/xf-der-invalid-nonminimal-int.pem", wantErr: "integer not minimally-encoded"},
+		{desc: "RSAIntegerNotMinimal", in: "testdata/invalid/xf-der-pubkey-rsa-nonminimal-int.pem", wantErr: "integer not minimally-encoded"},
+		{desc: "SubjectNonPrintable", in: "testdata/invalid/xf-subject-nonprintable.pem", wantErr: "PrintableString contains invalid character"},
+		{desc: "NegativeRSAModulus", in: "testdata/invalid/xf-pubkey-rsa-modulus-negative.pem", wantErr: "RSA modulus is not a positive number"},
+	}
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			data, err := ioutil.ReadFile(test.in)
+			if err != nil {
+				t.Fatalf("failed to read test data: %v", err)
+			}
+			block, _ := pem.Decode(data)
+			got, err := ParseCertificate(block.Bytes)
+			if err == nil {
+				t.Fatalf("ParseCertificate()=%+v,nil; want nil, err containing %q", got, test.wantErr)
+			}
+			if !strings.Contains(err.Error(), test.wantErr) {
+				t.Errorf("ParseCertificate()=_,%v; want nil, err containing %q", err, test.wantErr)
+			}
+			gotFatal := IsFatal(err)
+			if gotFatal != test.wantFatal {
+				t.Errorf("ParseCertificate()=_,%v with fatal=%t; want nil, err containing %q with fatal=%t", err, gotFatal, test.wantErr, test.wantFatal)
+			}
+		})
 	}
 }

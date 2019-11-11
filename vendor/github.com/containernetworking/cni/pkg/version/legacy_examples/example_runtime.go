@@ -150,8 +150,10 @@ var V010_Runtime = ExampleRuntime{
 import (
 	"fmt"
 	"io/ioutil"
+	"net"
 	"os"
 
+	"github.com/containernetworking/cni/pkg/ns"
 	"github.com/containernetworking/cni/libcni"
 )
 
@@ -179,10 +181,19 @@ func exec() int {
 		return 1
 	}
 
+	targetNs, err := ns.NewNS()
+	if err !=  nil {
+		fmt.Printf("Could not create ns: %+v", err)
+		return 1
+	}
+	defer targetNs.Close()
+
+	ifName := "eth0"
+
 	runtimeConf := &libcni.RuntimeConf{
 		ContainerID: "some-container-id",
-		NetNS:       "/some/netns/path",
-		IfName:      "eth0",
+		NetNS:       targetNs.Path(),
+		IfName:      ifName,
 	}
 
 	cniConfig := &libcni.CNIConfig{Path: os.Args[1:]}
@@ -210,6 +221,18 @@ func exec() int {
 	if err != nil {
 		fmt.Printf("DelNetwork failed: %v", err)
 		return 5
+	}
+
+	err = targetNs.Do(func(ns.NetNS) error {
+		_, err := net.InterfaceByName(ifName)
+		if err == nil {
+			return fmt.Errorf("interface was not deleted")
+		}
+		return nil
+	})
+	if err != nil {
+		fmt.Println(err)
+		return 6
 	}
 
 	return 0
