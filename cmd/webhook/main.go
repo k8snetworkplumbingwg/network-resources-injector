@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/golang/glog"
 	"github.com/fsnotify/fsnotify"
+	"github.com/golang/glog"
 	"github.com/intel/network-resources-injector/pkg/webhook"
 )
 
@@ -31,6 +31,7 @@ func main() {
 	address := flag.String("bind-address", "0.0.0.0", "The IP address on which to listen for the --port port.")
 	cert := flag.String("tls-cert-file", "cert.pem", "File containing the default x509 Certificate for HTTPS.")
 	key := flag.String("tls-private-key-file", "key.pem", "File containing the default x509 private key matching --tls-cert-file.")
+	resourceNameKeys := flag.String("network-resource-name-keys", "k8s.v1.cni.cncf.io/resourceName", "comma separated resource name keys --network-resource-name-keys.")
 	flag.Parse()
 
 	glog.Infof("starting mutating admission controller for network resources injection")
@@ -42,6 +43,11 @@ func main() {
 
 	/* init API client */
 	webhook.SetupInClusterClient()
+
+	err = webhook.SetResourceNameKeys(*resourceNameKeys)
+	if err != nil {
+		glog.Fatalf("error in setting resource name keys: %s", err.Error())
+	}
 
 	go func() {
 		/* register handlers */

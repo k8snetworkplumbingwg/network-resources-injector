@@ -44,12 +44,12 @@ type jsonPatchOperation struct {
 }
 
 const (
-	networksAnnotationKey  = "k8s.v1.cni.cncf.io/networks"
-	networkResourceNameKey = "k8s.v1.cni.cncf.io/resourceName"
+	networksAnnotationKey = "k8s.v1.cni.cncf.io/networks"
 )
 
 var (
-	clientset kubernetes.Interface
+	clientset        kubernetes.Interface
+	resourceNameKeys []string
 )
 
 func prepareAdmissionReviewResponse(allowed bool, message string, ar *v1beta1.AdmissionReview) error {
@@ -271,17 +271,17 @@ func patchEmptyResources(patch []jsonPatchOperation, containerIndex uint, key st
 
 func addVolDownwardAPI(patch []jsonPatchOperation) []jsonPatchOperation {
 	labels := corev1.ObjectFieldSelector{
-		FieldPath:"metadata.labels",
+		FieldPath: "metadata.labels",
 	}
 	dAPILabels := corev1.DownwardAPIVolumeFile{
-		Path: "labels",
+		Path:     "labels",
 		FieldRef: &labels,
 	}
 	annotations := corev1.ObjectFieldSelector{
-		FieldPath:"metadata.annotations",
+		FieldPath: "metadata.annotations",
 	}
 	dAPIAnnotations := corev1.DownwardAPIVolumeFile{
-		Path: "annotations",
+		Path:     "annotations",
 		FieldRef: &annotations,
 	}
 	dAPIItems := []corev1.DownwardAPIVolumeFile{dAPILabels, dAPIAnnotations}
@@ -292,14 +292,14 @@ func addVolDownwardAPI(patch []jsonPatchOperation) []jsonPatchOperation {
 		DownwardAPI: &dAPIVolSource,
 	}
 	vol := corev1.Volume{
-		Name: "podnetinfo",
+		Name:         "podnetinfo",
 		VolumeSource: volSource,
 	}
 
 	patch = append(patch, jsonPatchOperation{
 		Operation: "add",
 		Path:      "/spec/volumes/-",
-		Value:    vol,
+		Value:     vol,
 	})
 
 	return patch
@@ -308,15 +308,15 @@ func addVolDownwardAPI(patch []jsonPatchOperation) []jsonPatchOperation {
 func addVolumeMount(patch []jsonPatchOperation) []jsonPatchOperation {
 
 	vm := corev1.VolumeMount{
-		Name: "podnetinfo",
-		ReadOnly: false,
+		Name:      "podnetinfo",
+		ReadOnly:  false,
 		MountPath: "/etc/podnetinfo",
 	}
 
 	patch = append(patch, jsonPatchOperation{
 		Operation: "add",
 		Path:      "/spec/containers/0/volumeMounts/-", // NOTE: in future we may want to patch specific container (not always the first one)
-		Value:      vm,
+		Value:     vm,
 	})
 
 	return patch
@@ -372,12 +372,14 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 			glog.Infof("network attachment definition '%s/%s' found", n.Namespace, n.Name)
 
 			/* network object exists, so check if it contains resourceName annotation */
-			if resourceName, exists := networkAttachmentDefinition.ObjectMeta.Annotations[networkResourceNameKey]; exists {
-				/* add resource to map/increment if it was already there */
-				resourceRequests[resourceName]++
-				glog.Infof("resource '%s' needs to be requested for network '%s/%s'", resourceName, n.Namespace, n.Name)
-			} else {
-				glog.Infof("network '%s/%s' doesn't use custom resources, skipping...", n.Namespace, n.Name)
+			for _, networkResourceNameKey := range resourceNameKeys {
+				if resourceName, exists := networkAttachmentDefinition.ObjectMeta.Annotations[networkResourceNameKey]; exists {
+					/* add resource to map/increment if it was already there */
+					resourceRequests[resourceName]++
+					glog.Infof("resource '%s' needs to be requested for network '%s/%s'", resourceName, n.Namespace, n.Name)
+				} else {
+					glog.Infof("network '%s/%s' doesn't use custom resources, skipping...", n.Namespace, n.Name)
+				}
 			}
 		}
 
@@ -439,6 +441,17 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 	writeResponse(w, ar)
 	return
 
+}
+
+func SetResourceNameKeys(keys string) error {
+	if keys == "" {
+		return errors.New("resoure keys can not be empty")
+	}
+	for _, resourceNameKey := range strings.Split(keys, ",") {
+		resourceNameKey = strings.TrimSpace(resourceNameKey)
+		resourceNameKeys = append(resourceNameKeys, resourceNameKey)
+	}
+	return nil
 }
 
 // SetupInClusterClient setups K8s client to communicate with the API server
