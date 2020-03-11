@@ -54,6 +54,7 @@ type hugepageResourceData struct {
 
 const (
 	networksAnnotationKey = "k8s.v1.cni.cncf.io/networks"
+	nodeSelectorKey       = "k8s.v1.cni.cncf.io/nodeSelector"
 )
 
 var (
@@ -481,6 +482,26 @@ func createEnvPatch(patch []jsonPatchOperation, container *corev1.Container,
 	return patch
 }
 
+func updateNodeSelector(existing map[string]string, desired map[string]string, patch []jsonPatchOperation) []jsonPatchOperation {
+	newExistingMap := make(map[string]string)
+	if existing != nil {
+		for k, v := range existing {
+			newExistingMap[k] = v
+		}
+	}
+	if desired != nil {
+		for k, v := range desired {
+			newExistingMap[k] = v
+		}
+	}
+	patch = append(patch, jsonPatchOperation{
+		Operation: "add",
+		Path:      "/spec/nodeSelector",
+		Value:     newExistingMap,
+	})
+	return patch
+}
+
 // MutateHandler handles AdmissionReview requests and sends responses back to the K8s API server
 func MutateHandler(w http.ResponseWriter, req *http.Request) {
 	glog.Infof("Received mutation request")
@@ -503,12 +524,18 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 		/* map of resources request needed by a pod and a number of them */
 		resourceRequests := make(map[string]int64)
 
+		/* map of node labels on which pod needs to be scheduled*/
+		desiredNsMap := make(map[string]string)
+
 		/* unmarshal list of network selection objects */
 		networks, err := parsePodNetworkSelections(netSelections, pod.ObjectMeta.Namespace)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+
+		/* get the existing node selector map from pod spec */
+		existingNsMap := pod.Spec.NodeSelector
 
 		for _, n := range networks {
 			/* for each network in annotation ask API server for network-attachment-definition */
@@ -536,6 +563,16 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 					glog.Infof("resource '%s' needs to be requested for network '%s/%s'", resourceName, n.Namespace, n.Name)
 				} else {
 					glog.Infof("network '%s/%s' doesn't use custom resources, skipping...", n.Namespace, n.Name)
+				}
+			}
+
+			/* parse the net-attach-def annotations for node selector labels and add it to the addedNsMap */
+			if ns, exists := networkAttachmentDefinition.ObjectMeta.Annotations[nodeSelectorKey]; exists {
+				nsNameValue := strings.Split(ns, "=")
+				if len(nsNameValue) == 2 {
+					desiredNsMap[strings.TrimSpace(nsNameValue[0])] = strings.TrimSpace(nsNameValue[1])
+				} else {
+					glog.Errorf("incorrect node selector string in net attach def: %s", ns)
 				}
 			}
 		}
@@ -635,6 +672,9 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 					}
 				}
 			}
+
+			/* patch the pod with additional node selector labels */
+			patch = updateNodeSelector(existingNsMap, desiredNsMap, patch)
 
 			patch = createVolPatch(patch, hugepageResourceList)
 			glog.Infof("patch after all mutations: %v", patch)
