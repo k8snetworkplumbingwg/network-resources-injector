@@ -27,7 +27,7 @@ import (
 	"k8s.io/api/admission/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/intel/multus-cni/types"
+	"gopkg.in/intel/multus-cni.v3/types"
 )
 
 var _ = Describe("Webhook", func() {
