@@ -23,7 +23,7 @@ import (
 	"strings"
 
 	"github.com/golang/glog"
-	"github.com/intel/multus-cni/types"
+	"gopkg.in/intel/multus-cni.v3/types"
 	cniv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	"github.com/pkg/errors"
 
