@@ -51,6 +51,7 @@ rules:
   resources:
   - certificatesigningrequests
   - certificatesigningrequests/approval
+  - signers
   verbs:
   - '*'
 ---
