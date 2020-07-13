@@ -15,6 +15,7 @@
 package webhook
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -231,7 +232,7 @@ func parsePodNetworkSelectionElement(selection, defaultNamespace string) (*types
 
 func getNetworkAttachmentDefinition(namespace, name string) (*cniv1.NetworkAttachmentDefinition, error) {
 	path := fmt.Sprintf("/apis/k8s.cni.cncf.io/v1/namespaces/%s/network-attachment-definitions/%s", namespace, name)
-	rawNetworkAttachmentDefinition, err := clientset.ExtensionsV1beta1().RESTClient().Get().AbsPath(path).DoRaw()
+	rawNetworkAttachmentDefinition, err := clientset.ExtensionsV1beta1().RESTClient().Get().AbsPath(path).DoRaw(context.TODO())
 	if err != nil {
 		err := errors.Wrapf(err, "could not get Network Attachment Definition %s/%s", namespace, name)
 		glog.Error(err)
