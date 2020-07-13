@@ -15,6 +15,7 @@
 package installer
 
 import (
+	"context"
 	"io/ioutil"
 	"strings"
 	"time"
@@ -54,10 +55,10 @@ func generateCSR() ([]byte, []byte, error) {
 
 func getSignedCertificate(request []byte) ([]byte, error) {
 	csrName := strings.Join([]string{prefix, "csr"}, "-")
-	csr, err := clientset.CertificatesV1beta1().CertificateSigningRequests().Get(csrName, metav1.GetOptions{})
+	csr, err := clientset.CertificatesV1beta1().CertificateSigningRequests().Get(context.TODO(), csrName, metav1.GetOptions{})
 	if csr != nil || err == nil {
 		glog.Infof("CSR %s already exists, removing it first", csrName)
-		clientset.CertificatesV1beta1().CertificateSigningRequests().Delete(csrName, &metav1.DeleteOptions{})
+		clientset.CertificatesV1beta1().CertificateSigningRequests().Delete(context.TODO(), csrName, metav1.DeleteOptions{})
 	}
 
 	glog.Infof("creating new CSR %s", csrName)
@@ -70,7 +71,7 @@ func getSignedCertificate(request []byte) ([]byte, error) {
 	csr.Spec.Usages = []v1beta1.KeyUsage{v1beta1.UsageDigitalSignature, v1beta1.UsageServerAuth, v1beta1.UsageKeyEncipherment}
 
 	/* push CSR to Kubernetes API server */
-	csr, err = clientset.CertificatesV1beta1().CertificateSigningRequests().Create(csr)
+	csr, err = clientset.CertificatesV1beta1().CertificateSigningRequests().Create(context.TODO(), csr, metav1.CreateOptions{})
 	if err != nil {
 		return nil, errors.Wrap(err, "error creating CSR in Kubernetes API: %s")
 	}
@@ -89,7 +90,7 @@ func getSignedCertificate(request []byte) ([]byte, error) {
 		Message:        "This CSR was approved by net-attach-def admission controller installer.",
 		LastUpdateTime: metav1.Now(),
 	})
-	csr, err = clientset.CertificatesV1beta1().CertificateSigningRequests().UpdateApproval(csr)
+	csr, err = clientset.CertificatesV1beta1().CertificateSigningRequests().UpdateApproval(context.TODO(), csr, metav1.UpdateOptions{})
 	glog.Infof("certificate approval sent")
 	if err != nil {
 		return nil, errors.Wrap(err, "error approving CSR in Kubernetes API")
@@ -99,7 +100,7 @@ func getSignedCertificate(request []byte) ([]byte, error) {
 	glog.Infof("waiting for the signed certificate to be issued...")
 	start := time.Now()
 	for range time.Tick(time.Second) {
-		csr, err = clientset.CertificatesV1beta1().CertificateSigningRequests().Get(csrName, metav1.GetOptions{})
+		csr, err = clientset.CertificatesV1beta1().CertificateSigningRequests().Get(context.TODO(), csrName, metav1.GetOptions{})
 		if err != nil {
 			return nil, errors.Wrap(err, "error getting signed ceritificate from the API server")
 		}
@@ -137,8 +138,8 @@ func createMutatingWebhookConfiguration(certificate []byte) error {
 				"app": prefix,
 			},
 		},
-		Webhooks: []arv1beta1.Webhook{
-			arv1beta1.Webhook{
+		Webhooks: []arv1beta1.MutatingWebhook{
+			arv1beta1.MutatingWebhook{
 				Name: configName + ".k8s.cni.cncf.io",
 				ClientConfig: arv1beta1.WebhookClientConfig{
 					CABundle: certificate,
@@ -162,7 +163,7 @@ func createMutatingWebhookConfiguration(certificate []byte) error {
 			},
 		},
 	}
-	_, err := clientset.AdmissionregistrationV1beta1().MutatingWebhookConfigurations().Create(configuration)
+	_, err := clientset.AdmissionregistrationV1beta1().MutatingWebhookConfigurations().Create(context.TODO(), configuration, metav1.CreateOptions{})
 	return err
 }
 
@@ -188,15 +189,15 @@ func createService() error {
 			},
 		},
 	}
-	_, err := clientset.CoreV1().Services(namespace).Create(service)
+	_, err := clientset.CoreV1().Services(namespace).Create(context.TODO(), service, metav1.CreateOptions{})
 	return err
 }
 
 func removeServiceIfExists(serviceName string) {
-	service, err := clientset.CoreV1().Services(namespace).Get(serviceName, metav1.GetOptions{})
+	service, err := clientset.CoreV1().Services(namespace).Get(context.TODO(), serviceName, metav1.GetOptions{})
 	if service != nil && err == nil {
 		glog.Infof("service %s already exists, removing it first", serviceName)
-		err := clientset.CoreV1().Services(namespace).Delete(serviceName, &metav1.DeleteOptions{})
+		err := clientset.CoreV1().Services(namespace).Delete(context.TODO(), serviceName, metav1.DeleteOptions{})
 		if err != nil {
 			glog.Errorf("error trying to remove service: %s", err)
 		}
@@ -205,10 +206,10 @@ func removeServiceIfExists(serviceName string) {
 }
 
 func removeMutatingWebhookIfExists(configName string) {
-	config, err := clientset.AdmissionregistrationV1beta1().MutatingWebhookConfigurations().Get(configName, metav1.GetOptions{})
+	config, err := clientset.AdmissionregistrationV1beta1().MutatingWebhookConfigurations().Get(context.TODO(), configName, metav1.GetOptions{})
 	if config != nil && err == nil {
 		glog.Infof("mutating webhook %s already exists, removing it first", configName)
-		err := clientset.AdmissionregistrationV1beta1().MutatingWebhookConfigurations().Delete(configName, &metav1.DeleteOptions{})
+		err := clientset.AdmissionregistrationV1beta1().MutatingWebhookConfigurations().Delete(context.TODO(), configName, metav1.DeleteOptions{})
 		if err != nil {
 			glog.Errorf("error trying to remove mutating webhook configuration: %s", err)
 		}
@@ -217,10 +218,10 @@ func removeMutatingWebhookIfExists(configName string) {
 }
 
 func removeSecretIfExists(secretName string) {
-	secret, err := clientset.CoreV1().Secrets(namespace).Get(secretName, metav1.GetOptions{})
+	secret, err := clientset.CoreV1().Secrets(namespace).Get(context.TODO(), secretName, metav1.GetOptions{})
 	if secret != nil && err == nil {
 		glog.Infof("secret %s already exists, removing it first", secretName)
-		err := clientset.CoreV1().Secrets(namespace).Delete(secretName, &metav1.DeleteOptions{})
+		err := clientset.CoreV1().Secrets(namespace).Delete(context.TODO(), secretName, metav1.DeleteOptions{})
 		if err != nil {
 			glog.Errorf("error trying to remove secret: %s", err)
 		}

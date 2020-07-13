@@ -12,13 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM golang:1.12-alpine as builder
+FROM golang:1.13-alpine as builder
 ADD . /usr/src/network-resources-injector
 RUN apk add --update --virtual build-dependencies build-base linux-headers && \
     cd /usr/src/network-resources-injector && \
     make
 
-FROM golang:1.12-alpine
+FROM golang:1.13-alpine
 COPY --from=builder /usr/src/network-resources-injector/bin/webhook /usr/bin/
 COPY --from=builder /usr/src/network-resources-injector/bin/installer /usr/bin/
 

@@ -84,6 +84,9 @@ type NetworkSelectionElement struct {
 	// MacRequest contains an optional requested MAC address for this
 	// network attachment
 	MacRequest string `json:"mac,omitempty"`
+	// InfinibandGUIDRequest contains an optional requested Infiniband GUID
+	// address for this network attachment
+	InfinibandGUIDRequest string `json:"infiniband-guid,omitempty"`
 	// InterfaceRequest contains an optional requested name for the
 	// network interface this attachment will create in the container
 	InterfaceRequest string `json:"interface,omitempty"`
