@@ -45,12 +45,12 @@ type jsonPatchOperation struct {
 }
 
 const (
-	networksAnnotationKey  = "k8s.v1.cni.cncf.io/networks"
-	networkResourceNameKey = "k8s.v1.cni.cncf.io/resourceName"
+	networksAnnotationKey = "k8s.v1.cni.cncf.io/networks"
 )
 
 var (
-	clientset kubernetes.Interface
+	clientset        kubernetes.Interface
+	resourceNameKeys []string
 )
 
 func prepareAdmissionReviewResponse(allowed bool, message string, ar *v1beta1.AdmissionReview) error {
@@ -373,12 +373,14 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 			glog.Infof("network attachment definition '%s/%s' found", n.Namespace, n.Name)
 
 			/* network object exists, so check if it contains resourceName annotation */
-			if resourceName, exists := networkAttachmentDefinition.ObjectMeta.Annotations[networkResourceNameKey]; exists {
-				/* add resource to map/increment if it was already there */
-				resourceRequests[resourceName]++
-				glog.Infof("resource '%s' needs to be requested for network '%s/%s'", resourceName, n.Namespace, n.Name)
-			} else {
-				glog.Infof("network '%s/%s' doesn't use custom resources, skipping...", n.Namespace, n.Name)
+			for _, networkResourceNameKey := range resourceNameKeys {
+				if resourceName, exists := networkAttachmentDefinition.ObjectMeta.Annotations[networkResourceNameKey]; exists {
+					/* add resource to map/increment if it was already there */
+					resourceRequests[resourceName]++
+					glog.Infof("resource '%s' needs to be requested for network '%s/%s'", resourceName, n.Namespace, n.Name)
+				} else {
+					glog.Infof("network '%s/%s' doesn't use custom resources, skipping...", n.Namespace, n.Name)
+				}
 			}
 		}
 
@@ -444,6 +446,17 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 	writeResponse(w, ar)
 	return
 
+}
+
+func SetResourceNameKeys(keys string) error {
+	if keys == "" {
+		return errors.New("resoure keys can not be empty")
+	}
+	for _, resourceNameKey := range strings.Split(keys, ",") {
+		resourceNameKey = strings.TrimSpace(resourceNameKey)
+		resourceNameKeys = append(resourceNameKeys, resourceNameKey)
+	}
+	return nil
 }
 
 // SetupInClusterClient setups K8s client to communicate with the API server
