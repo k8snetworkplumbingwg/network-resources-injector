@@ -10,6 +10,7 @@ require (
 	github.com/onsi/ginkgo v1.14.0
 	github.com/onsi/gomega v1.10.1
 	github.com/pkg/errors v0.9.1
+	golang.org/x/text v0.3.3 // indirect
 	gopkg.in/intel/multus-cni.v3 v3.4.2
 	k8s.io/api v0.18.5
 	k8s.io/apimachinery v0.18.5
