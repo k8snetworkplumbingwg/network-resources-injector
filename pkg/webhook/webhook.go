@@ -185,6 +185,19 @@ func getNamespaceFromOwnerReference(ownerRef metav1.OwnerReference) (namespace s
 				break
 			}
 		}
+	} else if ownerRef.Kind == "ReplicationController" {
+		var replicationControllers *corev1.ReplicationControllerList
+		replicationControllers, err = clientset.CoreV1().ReplicationControllers("").List(context.TODO(), metav1.ListOptions{})
+		if err != nil {
+			return
+		}
+		for _, replicationController := range replicationControllers.Items {
+			if replicationController.ObjectMeta.Name == ownerRef.Name && replicationController.ObjectMeta.UID == ownerRef.UID {
+				namespace = replicationController.ObjectMeta.Namespace
+				err = nil
+				break
+			}
+		}
 	}
 	if namespace == "" {
 		err = errors.New("pod namespace is not found")

@@ -38,6 +38,7 @@ rules:
   - extensions
   - apps
   resources:
+  - replicationcontrollers
   - replicasets
   - daemonsets
   - statefulsets
