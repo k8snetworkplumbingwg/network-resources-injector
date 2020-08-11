@@ -146,7 +146,8 @@ func deserializePod(ar *v1beta1.AdmissionReview) (corev1.Pod, error) {
 
 func getNamespaceFromOwnerReference(ownerRef metav1.OwnerReference) (namespace string, err error) {
 	namespace = ""
-	if ownerRef.Kind == "ReplicaSet" {
+	switch ownerRef.Kind {
+	case "ReplicaSet":
 		var replicaSets *v1.ReplicaSetList
 		replicaSets, err = clientset.AppsV1().ReplicaSets("").List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
@@ -159,7 +160,7 @@ func getNamespaceFromOwnerReference(ownerRef metav1.OwnerReference) (namespace s
 				break
 			}
 		}
-	} else if ownerRef.Kind == "DaemonSet" {
+	case "DaemonSet":
 		var daemonSets *v1.DaemonSetList
 		daemonSets, err = clientset.AppsV1().DaemonSets("").List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
@@ -172,7 +173,7 @@ func getNamespaceFromOwnerReference(ownerRef metav1.OwnerReference) (namespace s
 				break
 			}
 		}
-	} else if ownerRef.Kind == "StatefulSet" {
+	case "StatefulSet":
 		var statefulSets *v1.StatefulSetList
 		statefulSets, err = clientset.AppsV1().StatefulSets("").List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
@@ -185,7 +186,7 @@ func getNamespaceFromOwnerReference(ownerRef metav1.OwnerReference) (namespace s
 				break
 			}
 		}
-	} else if ownerRef.Kind == "ReplicationController" {
+	case "ReplicationController":
 		var replicationControllers *corev1.ReplicationControllerList
 		replicationControllers, err = clientset.CoreV1().ReplicationControllers("").List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
@@ -199,10 +200,13 @@ func getNamespaceFromOwnerReference(ownerRef metav1.OwnerReference) (namespace s
 			}
 		}
 	}
+
 	if namespace == "" {
 		err = errors.New("pod namespace is not found")
 	}
+
 	return
+
 }
 
 func toSafeJsonPatchKey(in string) string {
