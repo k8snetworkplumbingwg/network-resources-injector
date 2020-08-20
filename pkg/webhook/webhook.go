@@ -24,11 +24,12 @@ import (
 	"strings"
 
 	"github.com/golang/glog"
-	"gopkg.in/intel/multus-cni.v3/types"
 	cniv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	"github.com/pkg/errors"
+	"gopkg.in/intel/multus-cni.v3/types"
 
 	"k8s.io/api/admission/v1beta1"
+	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -129,11 +130,83 @@ func deserializePod(ar *v1beta1.AdmissionReview) (corev1.Pod, error) {
 	/* unmarshal Pod from AdmissionReview request */
 	pod := corev1.Pod{}
 	err := json.Unmarshal(ar.Request.Object.Raw, &pod)
-	/* fix for missing "default" namespace */
-	if pod.ObjectMeta.Namespace == "" {
-		pod.ObjectMeta.Namespace = "default"
+	if pod.ObjectMeta.Namespace != "" {
+		return pod, err
+	}
+	ownerRef := pod.ObjectMeta.OwnerReferences
+	if ownerRef != nil && len(ownerRef) > 0 {
+		namespace, err := getNamespaceFromOwnerReference(pod.ObjectMeta.OwnerReferences[0])
+		if err != nil {
+			return pod, err
+		}
+		pod.ObjectMeta.Namespace = namespace
 	}
 	return pod, err
+}
+
+func getNamespaceFromOwnerReference(ownerRef metav1.OwnerReference) (namespace string, err error) {
+	namespace = ""
+	switch ownerRef.Kind {
+	case "ReplicaSet":
+		var replicaSets *v1.ReplicaSetList
+		replicaSets, err = clientset.AppsV1().ReplicaSets("").List(context.TODO(), metav1.ListOptions{})
+		if err != nil {
+			return
+		}
+		for _, replicaSet := range replicaSets.Items {
+			if replicaSet.ObjectMeta.Name == ownerRef.Name && replicaSet.ObjectMeta.UID == ownerRef.UID {
+				namespace = replicaSet.ObjectMeta.Namespace
+				err = nil
+				break
+			}
+		}
+	case "DaemonSet":
+		var daemonSets *v1.DaemonSetList
+		daemonSets, err = clientset.AppsV1().DaemonSets("").List(context.TODO(), metav1.ListOptions{})
+		if err != nil {
+			return
+		}
+		for _, daemonSet := range daemonSets.Items {
+			if daemonSet.ObjectMeta.Name == ownerRef.Name && daemonSet.ObjectMeta.UID == ownerRef.UID {
+				namespace = daemonSet.ObjectMeta.Namespace
+				err = nil
+				break
+			}
+		}
+	case "StatefulSet":
+		var statefulSets *v1.StatefulSetList
+		statefulSets, err = clientset.AppsV1().StatefulSets("").List(context.TODO(), metav1.ListOptions{})
+		if err != nil {
+			return
+		}
+		for _, statefulSet := range statefulSets.Items {
+			if statefulSet.ObjectMeta.Name == ownerRef.Name && statefulSet.ObjectMeta.UID == ownerRef.UID {
+				namespace = statefulSet.ObjectMeta.Namespace
+				err = nil
+				break
+			}
+		}
+	case "ReplicationController":
+		var replicationControllers *corev1.ReplicationControllerList
+		replicationControllers, err = clientset.CoreV1().ReplicationControllers("").List(context.TODO(), metav1.ListOptions{})
+		if err != nil {
+			return
+		}
+		for _, replicationController := range replicationControllers.Items {
+			if replicationController.ObjectMeta.Name == ownerRef.Name && replicationController.ObjectMeta.UID == ownerRef.UID {
+				namespace = replicationController.ObjectMeta.Namespace
+				err = nil
+				break
+			}
+		}
+	}
+
+	if namespace == "" {
+		err = errors.New("pod namespace is not found")
+	}
+
+	return
+
 }
 
 func toSafeJsonPatchKey(in string) string {
