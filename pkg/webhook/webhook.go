@@ -630,13 +630,18 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 			glog.Infof("pod doesn't need any custom network resources")
 		} else {
 			var patch []jsonPatchOperation
-
+			var existingrequestsMap map[corev1.ResourceName]resource.Quantity
+			var existingLimitsMap map[corev1.ResourceName]resource.Quantity
 			/* check whether resources paths exists in the first container and add as the first patches if missing */
 			if len(pod.Spec.Containers[0].Resources.Requests) == 0 {
 				patch = patchEmptyResources(patch, 0, "requests")
+			} else {
+				existingrequestsMap = pod.Spec.Containers[0].Resources.Requests.DeepCopy()
 			}
 			if len(pod.Spec.Containers[0].Resources.Limits) == 0 {
 				patch = patchEmptyResources(patch, 0, "limits")
+			} else {
+				existingLimitsMap = pod.Spec.Containers[0].Resources.Limits.DeepCopy()
 			}
 
 			resourceList := corev1.ResourceList{}
@@ -644,16 +649,24 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 				resourceList[corev1.ResourceName(name)] = *resource.NewQuantity(number, resource.DecimalSI)
 			}
 
-			for resource, quantity := range resourceList {
+			for resourceName, quantity := range resourceList {
+				reqQuantity := quantity
+				limitQuantity := quantity
+				if value, ok := existingrequestsMap[resourceName]; ok {
+					reqQuantity.Add(value)
+				}
 				patch = append(patch, jsonPatchOperation{
 					Operation: "add",
-					Path:      "/spec/containers/0/resources/requests/" + toSafeJsonPatchKey(resource.String()), // NOTE: in future we may want to patch specific container (not always the first one)
-					Value:     quantity,
+					Path:      "/spec/containers/0/resources/requests/" + toSafeJsonPatchKey(resourceName.String()), // NOTE: in future we may want to patch specific container (not always the first one)
+					Value:     reqQuantity,
 				})
+				if value, ok := existingLimitsMap[resourceName]; ok {
+					limitQuantity.Add(value)
+				}
 				patch = append(patch, jsonPatchOperation{
 					Operation: "add",
-					Path:      "/spec/containers/0/resources/limits/" + toSafeJsonPatchKey(resource.String()),
-					Value:     quantity,
+					Path:      "/spec/containers/0/resources/limits/" + toSafeJsonPatchKey(resourceName.String()),
+					Value:     limitQuantity,
 				})
 			}
 
