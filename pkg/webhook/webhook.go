@@ -199,6 +199,10 @@ func getNamespaceFromOwnerReference(ownerRef metav1.OwnerReference) (namespace s
 				break
 			}
 		}
+	default:
+		glog.Infof("owner reference kind is not supported: %v, using default namespace", ownerRef.Kind)
+		namespace = "default"
+		return
 	}
 
 	if namespace == "" {
