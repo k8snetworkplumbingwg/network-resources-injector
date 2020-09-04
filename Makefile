@@ -22,5 +22,4 @@ test :
 	export t="/tmp/go-cover.$$.tmp" && go test -coverprofile=$t ./... && go tool cover -html=$t
 
 vendor :
-	glide update
-	glide install --strip-vendor
+	go mod tidy && go mod vendor
