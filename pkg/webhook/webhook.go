@@ -500,7 +500,7 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 			}
 
 			patch = createVolPatch(patch)
-			glog.Infof("patch after all mutations", patch)
+			glog.Infof("patch after all mutations: %v", patch)
 
 			patchBytes, _ := json.Marshal(patch)
 			ar.Response.Patch = patchBytes
