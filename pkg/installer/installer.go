@@ -116,10 +116,10 @@ func getSignedCertificate(request []byte) ([]byte, error) {
 }
 
 func writeToFile(certificate, key []byte, certFilename, keyFilename string) error {
-	if err := ioutil.WriteFile("/etc/tls/"+certFilename, certificate, 0644); err != nil {
+	if err := ioutil.WriteFile("/etc/tls/"+certFilename, certificate, 0400); err != nil {
 		return err
 	}
-	if err := ioutil.WriteFile("/etc/tls/"+keyFilename, key, 0644); err != nil {
+	if err := ioutil.WriteFile("/etc/tls/"+keyFilename, key, 0400); err != nil {
 		return err
 	}
 	return nil
