@@ -181,7 +181,7 @@ func createService() error {
 			Ports: []corev1.ServicePort{
 				corev1.ServicePort{
 					Port:       443,
-					TargetPort: intstr.FromInt(443),
+					TargetPort: intstr.FromInt(8443),
 				},
 			},
 			Selector: map[string]string{
