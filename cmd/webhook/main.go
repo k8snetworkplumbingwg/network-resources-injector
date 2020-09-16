@@ -27,7 +27,7 @@ import (
 
 func main() {
 	/* load configuration */
-	port := flag.Int("port", 443, "The port on which to serve.")
+	port := flag.Int("port", 8443, "The port on which to serve.")
 	address := flag.String("bind-address", "0.0.0.0", "The IP address on which to listen for the --port port.")
 	cert := flag.String("tls-cert-file", "cert.pem", "File containing the default x509 Certificate for HTTPS.")
 	key := flag.String("tls-private-key-file", "key.pem", "File containing the default x509 private key matching --tls-cert-file.")
