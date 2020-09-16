@@ -70,10 +70,11 @@ func prepareAdmissionReviewResponse(allowed bool, message string, ar *v1beta1.Ad
 	return errors.New("received empty AdmissionReview request")
 }
 
-func readAdmissionReview(req *http.Request) (*v1beta1.AdmissionReview, int, error) {
+func readAdmissionReview(req *http.Request, w http.ResponseWriter) (*v1beta1.AdmissionReview, int, error) {
 	var body []byte
 
 	if req.Body != nil {
+		req.Body = http.MaxBytesReader(w, req.Body, 1 << 20)
 		if data, err := ioutil.ReadAll(req.Body); err == nil {
 			body = data
 		}
@@ -411,7 +412,7 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 	glog.Infof("Received mutation request")
 
 	/* read AdmissionReview from the HTTP request */
-	ar, httpStatus, err := readAdmissionReview(req)
+	ar, httpStatus, err := readAdmissionReview(req, w)
 	if err != nil {
 		http.Error(w, err.Error(), httpStatus)
 		return
