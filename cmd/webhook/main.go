@@ -34,6 +34,14 @@ func main() {
 	resourceNameKeys := flag.String("network-resource-name-keys", "k8s.v1.cni.cncf.io/resourceName", "comma separated resource name keys --network-resource-name-keys.")
 	flag.Parse()
 
+	if *port < 1024 || *port > 65535 {
+		glog.Fatalf("invalid port number. Choose between 1024 and 65535")
+	}
+
+	if *address == "" || *cert == "" || *key == "" || *resourceNameKeys == "" {
+		glog.Fatalf("input argument(s) not defined correctly")
+	}
+
 	glog.Infof("starting mutating admission controller for network resources injection")
 
 	keyPair, err := webhook.NewTlsKeypairReloader(*cert, *key)
