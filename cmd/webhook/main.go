@@ -60,7 +60,18 @@ func main() {
 	go func() {
 		/* register handlers */
 		var httpServer *http.Server
-		http.HandleFunc("/mutate", webhook.MutateHandler)
+
+		http.HandleFunc("/mutate", func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/mutate" {
+				http.NotFound(w, r)
+				return
+			}
+			if r.Method != http.MethodPost {
+				http.Error(w, "Invalid HTTP verb requested", 405)
+				return
+			}
+			webhook.MutateHandler(w,r)
+		})
 
 		/* start serving */
 		httpServer = &http.Server{
