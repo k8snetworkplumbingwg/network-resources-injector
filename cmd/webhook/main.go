@@ -26,12 +26,17 @@ import (
 	"github.com/intel/network-resources-injector/pkg/webhook"
 )
 
+const defaultClientCa = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+
 func main() {
+	var clientCAPaths webhook.ClientCAFlags
 	/* load configuration */
 	port := flag.Int("port", 8443, "The port on which to serve.")
 	address := flag.String("bind-address", "0.0.0.0", "The IP address on which to listen for the --port port.")
 	cert := flag.String("tls-cert-file", "cert.pem", "File containing the default x509 Certificate for HTTPS.")
 	key := flag.String("tls-private-key-file", "key.pem", "File containing the default x509 private key matching --tls-cert-file.")
+	insecure := flag.Bool("insecure", false, "Disable adding client CA to server TLS endpoint --insecure")
+	flag.Var(&clientCAPaths, "client-ca", "File containing client CA. This flag is repeatable if more than one client CA needs to be added to server")
 	resourceNameKeys := flag.String("network-resource-name-keys", "k8s.v1.cni.cncf.io/resourceName", "comma separated resource name keys --network-resource-name-keys.")
 	flag.Parse()
 
@@ -41,6 +46,10 @@ func main() {
 
 	if *address == "" || *cert == "" || *key == "" || *resourceNameKeys == "" {
 		glog.Fatalf("input argument(s) not defined correctly")
+        }
+
+	if len(clientCAPaths) == 0 {
+		clientCAPaths = append(clientCAPaths, defaultClientCa)
 	}
 
 	glog.Infof("starting mutating admission controller for network resources injection")
@@ -48,6 +57,11 @@ func main() {
 	keyPair, err := webhook.NewTlsKeypairReloader(*cert, *key)
 	if err != nil {
 		glog.Fatalf("error load certificate: %s", err.Error())
+	}
+
+	clientCaPool, err := webhook.NewClientCertPool(&clientCAPaths, *insecure)
+	if err != nil {
+		glog.Fatalf("error loading client CA pool: '%s'", err.Error())
 	}
 
 	/* init API client */
@@ -82,10 +96,12 @@ func main() {
 			MaxHeaderBytes:    1 << 20,
 			ReadHeaderTimeout: 1 * time.Second,
 			TLSConfig: &tls.Config{
-				MinVersion: tls.VersionTLS12,
-				CurvePreferences: []tls.CurveID{tls.CurveP521, tls.CurveP384},
+				ClientAuth:               webhook.GetClientAuth(*insecure),
+				MinVersion:               tls.VersionTLS12,
+				CurvePreferences:         []tls.CurveID{tls.CurveP521, tls.CurveP384},
+				ClientCAs:                clientCaPool.GetCertPool(),
 				PreferServerCipherSuites: true,
-				InsecureSkipVerify: false,
+				InsecureSkipVerify:       false,
 				CipherSuites: []uint16 {
 					// tls 1.2
 					tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
