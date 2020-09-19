@@ -19,6 +19,7 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/golang/glog"
@@ -75,7 +76,11 @@ func main() {
 
 		/* start serving */
 		httpServer = &http.Server{
-			Addr: fmt.Sprintf("%s:%d", *address, *port),
+			Addr:              fmt.Sprintf("%s:%d", *address, *port),
+			ReadTimeout:       5 * time.Second,
+			WriteTimeout:      10 * time.Second,
+			MaxHeaderBytes:    1 << 20,
+			ReadHeaderTimeout: 1 * time.Second,
 			TLSConfig: &tls.Config{
 				GetCertificate: keyPair.GetCertificateFunc(),
 			},
