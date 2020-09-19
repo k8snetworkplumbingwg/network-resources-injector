@@ -82,6 +82,18 @@ func main() {
 			MaxHeaderBytes:    1 << 20,
 			ReadHeaderTimeout: 1 * time.Second,
 			TLSConfig: &tls.Config{
+				MinVersion: tls.VersionTLS12,
+				CurvePreferences: []tls.CurveID{tls.CurveP521, tls.CurveP384},
+				PreferServerCipherSuites: true,
+				InsecureSkipVerify: false,
+				CipherSuites: []uint16 {
+					// tls 1.2
+					tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+					tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+					tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+					tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+					// tls 1.3 configuration not supported
+				},
 				GetCertificate: keyPair.GetCertificateFunc(),
 			},
 		}
