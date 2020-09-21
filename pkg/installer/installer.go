@@ -39,11 +39,13 @@ var (
 	prefix    string
 )
 
+const keyBitLength = 3072
+
 func generateCSR() ([]byte, []byte, error) {
 	glog.Infof("generating Certificate Signing Request")
 	serviceName := strings.Join([]string{prefix, "service"}, "-")
 	certRequest := csr.New()
-	certRequest.KeyRequest = &csr.KeyRequest{A: "rsa", S: 2048}
+	certRequest.KeyRequest = &csr.KeyRequest{A: "rsa", S: keyBitLength}
 	certRequest.CN = strings.Join([]string{serviceName, namespace, "svc"}, ".")
 	certRequest.Hosts = []string{
 		serviceName,
