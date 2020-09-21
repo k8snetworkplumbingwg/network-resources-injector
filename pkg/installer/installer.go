@@ -90,7 +90,7 @@ func getSignedCertificate(request []byte) ([]byte, error) {
 		Message:        "This CSR was approved by net-attach-def admission controller installer.",
 		LastUpdateTime: metav1.Now(),
 	})
-	csr, err = clientset.CertificatesV1beta1().CertificateSigningRequests().UpdateApproval(context.TODO(), csr, metav1.UpdateOptions{})
+	_, err = clientset.CertificatesV1beta1().CertificateSigningRequests().UpdateApproval(context.TODO(), csr, metav1.UpdateOptions{})
 	glog.Infof("certificate approval sent")
 	if err != nil {
 		return nil, errors.Wrap(err, "error approving CSR in Kubernetes API")
