@@ -115,3 +115,11 @@ To create the vendor folder invoke the following which will create a vendor fold
 ```bash
 make vendor
 ```
+
+## Security
+### Disable adding client CAs to server TLS endpoint
+If you wish to not add any client CAs to the servers TLS endpoint, add ```--insecure``` flag to webhook binary arguments.
+
+### Client CAs
+By default, we consume the client CA from the Kubernetes service account secrets directory ```/var/run/secrets/kubernetes.io/serviceaccount/```.
+If you wish to consume a client CA from a different location, please specify flag ```--client-ca``` with a valid path. If you wish to add more than one client CA, repeat this flag multiple times. If ```--client-ca``` is defined, the default client CA from the service account secrets directory will not be consumed.
