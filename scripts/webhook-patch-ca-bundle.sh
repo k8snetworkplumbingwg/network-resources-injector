@@ -5,8 +5,7 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-CA_BUNDLE=$(kubectl get configmap -n kube-system extension-apiserver-authentication -o=jsonpath='{.data.client-ca-file}' | base64 -w=0)
-export CA_BUNDLE
+export CA_BUNDLE=$(kubectl get configmap -n kube-system extension-apiserver-authentication -o=jsonpath='{.data.client-ca-file}' | base64 --w=0)
 
 if command -v envsubst >/dev/null 2>&1; then
     envsubst
