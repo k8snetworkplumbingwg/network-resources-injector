@@ -18,7 +18,7 @@ RUN apk add --update --virtual build-dependencies build-base linux-headers && \
     cd /usr/src/network-resources-injector && \
     make
 
-FROM golang:1.13-alpine
+FROM alpine:3.11
 COPY --from=builder /usr/src/network-resources-injector/bin/webhook /usr/bin/
 COPY --from=builder /usr/src/network-resources-injector/bin/installer /usr/bin/
 
