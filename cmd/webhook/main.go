@@ -27,12 +27,20 @@ import (
 
 func main() {
 	/* load configuration */
-	port := flag.Int("port", 443, "The port on which to serve.")
+	port := flag.Int("port", 8443, "The port on which to serve.")
 	address := flag.String("bind-address", "0.0.0.0", "The IP address on which to listen for the --port port.")
 	cert := flag.String("tls-cert-file", "cert.pem", "File containing the default x509 Certificate for HTTPS.")
 	key := flag.String("tls-private-key-file", "key.pem", "File containing the default x509 private key matching --tls-cert-file.")
 	resourceNameKeys := flag.String("network-resource-name-keys", "k8s.v1.cni.cncf.io/resourceName", "comma separated resource name keys --network-resource-name-keys.")
 	flag.Parse()
+
+	if *port < 1024 || *port > 65535 {
+		glog.Fatalf("invalid port number. Choose between 1024 and 65535")
+	}
+
+	if *address == "" || *cert == "" || *key == "" || *resourceNameKeys == "" {
+		glog.Fatalf("input argument(s) not defined correctly")
+	}
 
 	glog.Infof("starting mutating admission controller for network resources injection")
 
