@@ -1,5 +1,7 @@
 # Network Resources Injector
 
+[![Weekly minutes](https://img.shields.io/badge/Weekly%20Meeting%20Minutes-Mon%203pm%20GMT-blue.svg?style=plastic)](https://docs.google.com/document/d/1sJQMHbxZdeYJPgAWK1aSt6yzZ4K_8es7woVIrwinVwI)
+
 Network Resources Injector is a Kubernetes Dynamic Admission Controller application that provides functionality of patching Kubernetes pod specifications with requests and limits of custom network resources (managed by device plugins such as [intel/sriov-network-device-plugin](https://github.com/intel/sriov-network-device-plugin)).
 
 ## Getting started
