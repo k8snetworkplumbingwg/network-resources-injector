@@ -500,7 +500,7 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 			}
 
 			patch = createVolPatch(patch)
-			glog.Infof("patch after all mutations", patch)
+			glog.Infof("patch after all mutations: %v", patch)
 
 			patchBytes, _ := json.Marshal(patch)
 			ar.Response.Patch = patchBytes
@@ -525,6 +525,7 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 
 }
 
+// SetResourceNameKeys extracts resources from a string and add them to resourceNameKeys array
 func SetResourceNameKeys(keys string) error {
 	if keys == "" {
 		return errors.New("resoure keys can not be empty")
