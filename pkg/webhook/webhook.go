@@ -429,7 +429,11 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 		resourceRequests := make(map[string]int64)
 
 		/* unmarshal list of network selection objects */
-		networks, _ := parsePodNetworkSelections(netSelections, pod.ObjectMeta.Namespace)
+		networks, err := parsePodNetworkSelections(netSelections, pod.ObjectMeta.Namespace)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 
 		for _, n := range networks {
 			/* for each network in annotation ask API server for network-attachment-definition */
