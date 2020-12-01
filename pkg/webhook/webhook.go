@@ -26,8 +26,9 @@ import (
 	"github.com/golang/glog"
 	cniv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	"github.com/pkg/errors"
-	"gopkg.in/intel/multus-cni.v3/types"
+	multus "gopkg.in/intel/multus-cni.v3/types"
 
+	"github.com/intel/network-resources-injector/pkg/types"
 	"k8s.io/api/admission/v1beta1"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -45,13 +46,20 @@ type jsonPatchOperation struct {
 	Value     interface{} `json:"value,omitempty"`
 }
 
+type hugepageResourceData struct {
+	ResourceName  string
+	ContainerName string
+	Path          string
+}
+
 const (
 	networksAnnotationKey = "k8s.v1.cni.cncf.io/networks"
 )
 
 var (
-	clientset        kubernetes.Interface
-	resourceNameKeys []string
+	clientset             kubernetes.Interface
+	injectHugepageDownApi bool
+	resourceNameKeys      []string
 )
 
 func prepareAdmissionReviewResponse(allowed bool, message string, ar *v1beta1.AdmissionReview) error {
@@ -220,8 +228,8 @@ func toSafeJsonPatchKey(in string) string {
 	return out
 }
 
-func parsePodNetworkSelections(podNetworks, defaultNamespace string) ([]*types.NetworkSelectionElement, error) {
-	var networkSelections []*types.NetworkSelectionElement
+func parsePodNetworkSelections(podNetworks, defaultNamespace string) ([]*multus.NetworkSelectionElement, error) {
+	var networkSelections []*multus.NetworkSelectionElement
 
 	if len(podNetworks) == 0 {
 		err := errors.New("empty string passed as network selection elements list")
@@ -257,9 +265,9 @@ func parsePodNetworkSelections(podNetworks, defaultNamespace string) ([]*types.N
 	return networkSelections, nil
 }
 
-func parsePodNetworkSelectionElement(selection, defaultNamespace string) (*types.NetworkSelectionElement, error) {
+func parsePodNetworkSelectionElement(selection, defaultNamespace string) (*multus.NetworkSelectionElement, error) {
 	var namespace, name, netInterface string
-	var networkSelectionElement *types.NetworkSelectionElement
+	var networkSelectionElement *multus.NetworkSelectionElement
 
 	units := strings.Split(selection, "/")
 	switch len(units) {
@@ -299,7 +307,7 @@ func parsePodNetworkSelectionElement(selection, defaultNamespace string) (*types
 		}
 	}
 
-	networkSelectionElement = &types.NetworkSelectionElement{
+	networkSelectionElement = &multus.NetworkSelectionElement{
 		Namespace:        namespace,
 		Name:             name,
 		InterfaceRequest: netInterface,
@@ -348,22 +356,36 @@ func patchEmptyResources(patch []jsonPatchOperation, containerIndex uint, key st
 	return patch
 }
 
-func addVolDownwardAPI(patch []jsonPatchOperation) []jsonPatchOperation {
+func addVolDownwardAPI(patch []jsonPatchOperation, hugepageResourceList []hugepageResourceData) []jsonPatchOperation {
 	labels := corev1.ObjectFieldSelector{
 		FieldPath: "metadata.labels",
 	}
 	dAPILabels := corev1.DownwardAPIVolumeFile{
-		Path:     "labels",
+		Path:     types.LabelsPath,
 		FieldRef: &labels,
 	}
 	annotations := corev1.ObjectFieldSelector{
 		FieldPath: "metadata.annotations",
 	}
 	dAPIAnnotations := corev1.DownwardAPIVolumeFile{
-		Path:     "annotations",
+		Path:     types.AnnotationsPath,
 		FieldRef: &annotations,
 	}
 	dAPIItems := []corev1.DownwardAPIVolumeFile{dAPILabels, dAPIAnnotations}
+
+	for _, hugepageResource := range hugepageResourceList {
+		hugepageSelector := corev1.ResourceFieldSelector{
+			Resource:      hugepageResource.ResourceName,
+			ContainerName: hugepageResource.ContainerName,
+			Divisor:       *resource.NewQuantity(1*1024*1024, resource.BinarySI),
+		}
+		dAPIHugepage := corev1.DownwardAPIVolumeFile{
+			Path:             hugepageResource.Path,
+			ResourceFieldRef: &hugepageSelector,
+		}
+		dAPIItems = append(dAPIItems, dAPIHugepage)
+	}
+
 	dAPIVolSource := corev1.DownwardAPIVolumeSource{
 		Items: dAPIItems,
 	}
@@ -389,7 +411,7 @@ func addVolumeMount(patch []jsonPatchOperation) []jsonPatchOperation {
 	vm := corev1.VolumeMount{
 		Name:      "podnetinfo",
 		ReadOnly:  false,
-		MountPath: "/etc/podnetinfo",
+		MountPath: types.DownwardAPIMountPath,
 	}
 
 	patch = append(patch, jsonPatchOperation{
@@ -401,9 +423,9 @@ func addVolumeMount(patch []jsonPatchOperation) []jsonPatchOperation {
 	return patch
 }
 
-func createVolPatch(patch []jsonPatchOperation) []jsonPatchOperation {
+func createVolPatch(patch []jsonPatchOperation, hugepageResourceList []hugepageResourceData) []jsonPatchOperation {
 	patch = addVolumeMount(patch)
-	patch = addVolDownwardAPI(patch)
+	patch = addVolDownwardAPI(patch, hugepageResourceList)
 	return patch
 }
 
@@ -504,7 +526,52 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 				})
 			}
 
-			patch = createVolPatch(patch)
+			// Determine if hugepages are being requested for a given container,
+			// and if so, expose the value to the container via Downward API.
+			var hugepageResourceList []hugepageResourceData
+			glog.Infof("injectHugepageDownApi=%v", injectHugepageDownApi)
+			if injectHugepageDownApi {
+				for _, container := range pod.Spec.Containers {
+					if len(container.Resources.Requests) != 0 {
+						if quantity, exists := container.Resources.Requests["hugepages-1Gi"]; exists && quantity.IsZero() == false {
+							hugepageResource := hugepageResourceData{
+								ResourceName:  "requests.hugepages-1Gi",
+								ContainerName: container.Name,
+								Path:          types.Hugepages1GRequestPath,
+							}
+							hugepageResourceList = append(hugepageResourceList, hugepageResource)
+						}
+						if quantity, exists := container.Resources.Requests["hugepages-2Mi"]; exists && quantity.IsZero() == false {
+							hugepageResource := hugepageResourceData{
+								ResourceName:  "requests.hugepages-2Mi",
+								ContainerName: container.Name,
+								Path:          types.Hugepages2MRequestPath,
+							}
+							hugepageResourceList = append(hugepageResourceList, hugepageResource)
+						}
+					}
+					if len(container.Resources.Limits) != 0 {
+						if quantity, exists := container.Resources.Limits["hugepages-1Gi"]; exists && quantity.IsZero() == false {
+							hugepageResource := hugepageResourceData{
+								ResourceName:  "limits.hugepages-1Gi",
+								ContainerName: container.Name,
+								Path:          types.Hugepages1GLimitPath,
+							}
+							hugepageResourceList = append(hugepageResourceList, hugepageResource)
+						}
+						if quantity, exists := container.Resources.Limits["hugepages-2Mi"]; exists && quantity.IsZero() == false {
+							hugepageResource := hugepageResourceData{
+								ResourceName:  "limits.hugepages-2Mi",
+								ContainerName: container.Name,
+								Path:          types.Hugepages2MLimitPath,
+							}
+							hugepageResourceList = append(hugepageResourceList, hugepageResource)
+						}
+					}
+				}
+			}
+
+			patch = createVolPatch(patch, hugepageResourceList)
 			glog.Infof("patch after all mutations: %v", patch)
 
 			patchBytes, _ := json.Marshal(patch)
@@ -553,4 +620,10 @@ func SetupInClusterClient() {
 	if err != nil {
 		glog.Fatal(err)
 	}
+}
+
+// SetInjectHugepageDownApi sets a flag to indicate whether or not to inject the
+// hugepage request and limit for the Downward API.
+func SetInjectHugepageDownApi(hugepageFlag bool) {
+	injectHugepageDownApi = hugepageFlag
 }

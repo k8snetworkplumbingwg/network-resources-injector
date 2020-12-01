@@ -118,8 +118,14 @@ make vendor
 
 ## Security
 ### Disable adding client CAs to server TLS endpoint
-If you wish to not add any client CAs to the servers TLS endpoint, add ```--insecure``` flag to webhook binary arguments.
+If you wish to not add any client CAs to the servers TLS endpoint, add ```--insecure``` flag to webhook binary arguments (See [server.yaml](deployments/server.yaml)).
 
 ### Client CAs
 By default, we consume the client CA from the Kubernetes service account secrets directory ```/var/run/secrets/kubernetes.io/serviceaccount/```.
 If you wish to consume a client CA from a different location, please specify flag ```--client-ca``` with a valid path. If you wish to add more than one client CA, repeat this flag multiple times. If ```--client-ca``` is defined, the default client CA from the service account secrets directory will not be consumed.
+
+## Other Configuration
+### Expose Hugepages via Downward API
+In Kubernetes 1.20, an alpha feature was added to expose the requested hugepages to the container via the Downward API.
+Being alpha, this feature is disabled in Kubernetes by default.
+If enabled when Kubernetes is deployed via `FEATURE_GATES="DownwardAPIHugePages=true"`, then Network Resource Injector can be used to mutate the pod spec to publish the hugepage data to the container. To enable this functionality in Network Resource Injector, add ```--injectHugepageDownApi``` flag to webhook binary arguments (See [server.yaml](deployments/server.yaml)).
