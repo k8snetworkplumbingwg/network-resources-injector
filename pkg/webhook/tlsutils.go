@@ -87,7 +87,7 @@ func NewTlsKeypairReloader(certPath, keyPath string) (*tlsKeypairReloader, error
 func NewClientCertPool(clientCaPaths *ClientCAFlags, insecure bool) (*clientCertPool, error) {
 	pool := &clientCertPool{
 		certPaths: clientCaPaths,
-		insecure: insecure,
+		insecure:  insecure,
 	}
 	if !pool.insecure {
 		if err := pool.Load(); err != nil {

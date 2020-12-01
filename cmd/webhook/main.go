@@ -46,7 +46,7 @@ func main() {
 
 	if *address == "" || *cert == "" || *key == "" || *resourceNameKeys == "" {
 		glog.Fatalf("input argument(s) not defined correctly")
-        }
+	}
 
 	if len(clientCAPaths) == 0 {
 		clientCAPaths = append(clientCAPaths, defaultClientCa)
@@ -85,7 +85,7 @@ func main() {
 				http.Error(w, "Invalid HTTP verb requested", 405)
 				return
 			}
-			webhook.MutateHandler(w,r)
+			webhook.MutateHandler(w, r)
 		})
 
 		/* start serving */
@@ -102,7 +102,7 @@ func main() {
 				ClientCAs:                clientCaPool.GetCertPool(),
 				PreferServerCipherSuites: true,
 				InsecureSkipVerify:       false,
-				CipherSuites: []uint16 {
+				CipherSuites: []uint16{
 					// tls 1.2
 					tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
 					tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,

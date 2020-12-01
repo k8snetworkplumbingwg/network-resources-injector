@@ -74,7 +74,7 @@ func readAdmissionReview(req *http.Request, w http.ResponseWriter) (*v1beta1.Adm
 	var body []byte
 
 	if req.Body != nil {
-		req.Body = http.MaxBytesReader(w, req.Body, 1 << 20)
+		req.Body = http.MaxBytesReader(w, req.Body, 1<<20)
 		if data, err := ioutil.ReadAll(req.Body); err == nil {
 			body = data
 		}
