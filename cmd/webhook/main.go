@@ -36,6 +36,7 @@ func main() {
 	cert := flag.String("tls-cert-file", "cert.pem", "File containing the default x509 Certificate for HTTPS.")
 	key := flag.String("tls-private-key-file", "key.pem", "File containing the default x509 private key matching --tls-cert-file.")
 	insecure := flag.Bool("insecure", false, "Disable adding client CA to server TLS endpoint --insecure")
+	injectHugepageDownApi := flag.Bool("injectHugepageDownApi", false, "Enable hugepage requests and limits into Downward API.")
 	flag.Var(&clientCAPaths, "client-ca", "File containing client CA. This flag is repeatable if more than one client CA needs to be added to server")
 	resourceNameKeys := flag.String("network-resource-name-keys", "k8s.v1.cni.cncf.io/resourceName", "comma separated resource name keys --network-resource-name-keys.")
 	flag.Parse()
@@ -66,6 +67,8 @@ func main() {
 
 	/* init API client */
 	webhook.SetupInClusterClient()
+
+	webhook.SetInjectHugepageDownApi(*injectHugepageDownApi)
 
 	err = webhook.SetResourceNameKeys(*resourceNameKeys)
 	if err != nil {
