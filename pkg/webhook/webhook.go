@@ -53,8 +53,9 @@ type hugepageResourceData struct {
 }
 
 const (
-	networksAnnotationKey = "k8s.v1.cni.cncf.io/networks"
-	nodeSelectorKey       = "k8s.v1.cni.cncf.io/nodeSelector"
+	networksAnnotationKey       = "k8s.v1.cni.cncf.io/networks"
+	nodeSelectorKey             = "k8s.v1.cni.cncf.io/nodeSelector"
+	defaultNetworkAnnotationKey = "v1.multus-cni.io/default-network"
 )
 
 var (
@@ -332,6 +333,46 @@ func getNetworkAttachmentDefinition(namespace, name string) (*cniv1.NetworkAttac
 	return &networkAttachmentDefinition, nil
 }
 
+func parseNetworkAttachDefinition(net *multus.NetworkSelectionElement, reqs map[string]int64, nsMap map[string]string) (map[string]int64, map[string]string, error) {
+	/* for each network in annotation ask API server for network-attachment-definition */
+	networkAttachmentDefinition, err := getNetworkAttachmentDefinition(net.Namespace, net.Name)
+	if err != nil {
+		/* if doesn't exist: deny pod */
+		reason := errors.Wrapf(err, "could not find network attachment definition '%s/%s'", net.Namespace, net.Name)
+		glog.Error(reason)
+		return reqs, nsMap, reason
+	}
+	glog.Infof("network attachment definition '%s/%s' found", net.Namespace, net.Name)
+
+	/* network object exists, so check if it contains resourceName annotation */
+	for _, networkResourceNameKey := range resourceNameKeys {
+		if resourceName, exists := networkAttachmentDefinition.ObjectMeta.Annotations[networkResourceNameKey]; exists {
+			/* add resource to map/increment if it was already there */
+			reqs[resourceName]++
+			glog.Infof("resource '%s' needs to be requested for network '%s/%s'", resourceName, net.Namespace, net.Name)
+		} else {
+			glog.Infof("network '%s/%s' doesn't use custom resources, skipping...", net.Namespace, net.Name)
+		}
+	}
+
+	/* parse the net-attach-def annotations for node selector label and add it to the desiredNsMap */
+	if ns, exists := networkAttachmentDefinition.ObjectMeta.Annotations[nodeSelectorKey]; exists {
+		nsNameValue := strings.Split(ns, "=")
+		nsNameValueLen := len(nsNameValue)
+		if nsNameValueLen > 2 {
+			reason := fmt.Errorf("node selector in net-attach-def %s has more than one label", net.Name)
+			glog.Error(reason)
+			return reqs, nsMap, reason
+		} else if nsNameValueLen == 2 {
+			nsMap[strings.TrimSpace(nsNameValue[0])] = strings.TrimSpace(nsNameValue[1])
+		} else {
+			nsMap[strings.TrimSpace(ns)] = ""
+		}
+	}
+
+	return reqs, nsMap, nil
+}
+
 func handleValidationError(w http.ResponseWriter, ar *v1beta1.AdmissionReview, orgErr error) {
 	err := prepareAdmissionReviewResponse(false, orgErr.Error(), ar)
 	if err != nil {
@@ -508,6 +549,7 @@ func createNodeSelectorPatch(patch []jsonPatchOperation, existing map[string]str
 // MutateHandler handles AdmissionReview requests and sends responses back to the K8s API server
 func MutateHandler(w http.ResponseWriter, req *http.Request) {
 	glog.Infof("Received mutation request")
+	var err error
 
 	/* read AdmissionReview from the HTTP request */
 	ar, httpStatus, err := readAdmissionReview(req, w)
@@ -523,62 +565,55 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 		handleValidationError(w, ar, err)
 		return
 	}
-	if netSelections, exists := pod.ObjectMeta.Annotations[networksAnnotationKey]; exists && netSelections != "" {
+
+	defaultNetSelection, defExist := pod.ObjectMeta.Annotations[defaultNetworkAnnotationKey]
+	additionalNetSelections, addExists := pod.ObjectMeta.Annotations[networksAnnotationKey]
+
+	if defExist || addExists {
 		/* map of resources request needed by a pod and a number of them */
 		resourceRequests := make(map[string]int64)
 
 		/* map of node labels on which pod needs to be scheduled*/
 		desiredNsMap := make(map[string]string)
 
-		/* unmarshal list of network selection objects */
-		networks, err := parsePodNetworkSelections(netSelections, pod.ObjectMeta.Namespace)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		for _, n := range networks {
-			/* for each network in annotation ask API server for network-attachment-definition */
-			networkAttachmentDefinition, err := getNetworkAttachmentDefinition(n.Namespace, n.Name)
+		if defaultNetSelection != "" {
+			defNetwork, err := parsePodNetworkSelections(defaultNetSelection, pod.ObjectMeta.Namespace)
 			if err != nil {
-				/* if doesn't exist: deny pod */
-				reason := errors.Wrapf(err, "could not find network attachment definition '%s/%s'", n.Namespace, n.Name)
-				glog.Info(reason)
-				err = prepareAdmissionReviewResponse(false, reason.Error(), ar)
-				if err != nil {
-					glog.Errorf("error preparing AdmissionReview response: %s", err)
-					http.Error(w, err.Error(), http.StatusBadRequest)
-					return
-				}
-				writeResponse(w, ar)
+				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
-			glog.Infof("network attachment definition '%s/%s' found", n.Namespace, n.Name)
-
-			/* network object exists, so check if it contains resourceName annotation */
-			for _, networkResourceNameKey := range resourceNameKeys {
-				if resourceName, exists := networkAttachmentDefinition.ObjectMeta.Annotations[networkResourceNameKey]; exists {
-					/* add resource to map/increment if it was already there */
-					resourceRequests[resourceName]++
-					glog.Infof("resource '%s' needs to be requested for network '%s/%s'", resourceName, n.Namespace, n.Name)
-				} else {
-					glog.Infof("network '%s/%s' doesn't use custom resources, skipping...", n.Namespace, n.Name)
+			if len(defNetwork) == 1 {
+				resourceRequests, desiredNsMap, err = parseNetworkAttachDefinition(defNetwork[0], resourceRequests, desiredNsMap)
+				if err != nil {
+					err = prepareAdmissionReviewResponse(false, err.Error(), ar)
+					if err != nil {
+						glog.Errorf("error preparing AdmissionReview response: %s", err)
+						http.Error(w, err.Error(), http.StatusBadRequest)
+						return
+					}
+					writeResponse(w, ar)
+					return
 				}
 			}
-
-			/* parse the net-attach-def annotations for node selector label and add it to the desiredNsMap */
-			if ns, exists := networkAttachmentDefinition.ObjectMeta.Annotations[nodeSelectorKey]; exists {
-				nsNameValue := strings.Split(ns, "=")
-				nsNameValueLen := len(nsNameValue)
-				if nsNameValueLen > 2 {
-					errString := fmt.Sprintf("node selector in net-attach-def %s has more than one label", n.Name)
-					glog.Error(errString)
-					http.Error(w, errString, http.StatusBadRequest)
+		}
+		if additionalNetSelections != "" {
+			/* unmarshal list of network selection objects */
+			networks, err := parsePodNetworkSelections(additionalNetSelections, pod.ObjectMeta.Namespace)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			for _, n := range networks {
+				resourceRequests, desiredNsMap, err = parseNetworkAttachDefinition(n, resourceRequests, desiredNsMap)
+				if err != nil {
+					err = prepareAdmissionReviewResponse(false, err.Error(), ar)
+					if err != nil {
+						glog.Errorf("error preparing AdmissionReview response: %s", err)
+						http.Error(w, err.Error(), http.StatusBadRequest)
+						return
+					}
+					writeResponse(w, ar)
 					return
-				} else if nsNameValueLen == 2 {
-					desiredNsMap[strings.TrimSpace(nsNameValue[0])] = strings.TrimSpace(nsNameValue[1])
-				} else {
-					desiredNsMap[strings.TrimSpace(ns)] = ""
 				}
 			}
 		}
@@ -590,6 +625,7 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+
 		if len(resourceRequests) == 0 {
 			glog.Infof("pod doesn't need any custom network resources")
 		} else {
