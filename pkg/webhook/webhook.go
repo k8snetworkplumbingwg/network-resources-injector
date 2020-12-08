@@ -429,6 +429,58 @@ func createVolPatch(patch []jsonPatchOperation, hugepageResourceList []hugepageR
 	return patch
 }
 
+func addEnvVar(patch []jsonPatchOperation, containerIndex int, firstElement bool,
+	envName string, envVal string) []jsonPatchOperation {
+
+	env := corev1.EnvVar{
+		Name:  envName,
+		Value: envVal,
+	}
+
+	if firstElement {
+		patch = append(patch, jsonPatchOperation{
+			Operation: "add",
+			Path:      "/spec/containers/" + fmt.Sprintf("%d", containerIndex) + "/env",
+			Value:     []corev1.EnvVar{env},
+		})
+	} else {
+		patch = append(patch, jsonPatchOperation{
+			Operation: "add",
+			Path:      "/spec/containers/" + fmt.Sprintf("%d", containerIndex) + "/env/-",
+			Value:     env,
+		})
+	}
+
+	return patch
+}
+
+func createEnvPatch(patch []jsonPatchOperation, container *corev1.Container,
+	containerIndex int, envName string, envVal string) []jsonPatchOperation {
+
+	// Determine if requested ENV already exists
+	found := false
+	firstElement := false
+	if len(container.Env) != 0 {
+		for _, env := range container.Env {
+			if env.Name == envName {
+				found = true
+				if env.Value != envVal {
+					glog.Warningf("Error, adding env '%s', name existed but value different: '%s' != '%s'",
+						envName, env.Value, envVal)
+				}
+				break
+			}
+		}
+	} else {
+		firstElement = true
+	}
+
+	if !found {
+		patch = addEnvVar(patch, containerIndex, firstElement, envName, envVal)
+	}
+	return patch
+}
+
 // MutateHandler handles AdmissionReview requests and sends responses back to the K8s API server
 func MutateHandler(w http.ResponseWriter, req *http.Request) {
 	glog.Infof("Received mutation request")
@@ -531,23 +583,26 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 			var hugepageResourceList []hugepageResourceData
 			glog.Infof("injectHugepageDownApi=%v", injectHugepageDownApi)
 			if injectHugepageDownApi {
-				for _, container := range pod.Spec.Containers {
+				for containerIndex, container := range pod.Spec.Containers {
+					found := false
 					if len(container.Resources.Requests) != 0 {
 						if quantity, exists := container.Resources.Requests["hugepages-1Gi"]; exists && quantity.IsZero() == false {
 							hugepageResource := hugepageResourceData{
 								ResourceName:  "requests.hugepages-1Gi",
 								ContainerName: container.Name,
-								Path:          types.Hugepages1GRequestPath,
+								Path:          types.Hugepages1GRequestPath + "_" + container.Name,
 							}
 							hugepageResourceList = append(hugepageResourceList, hugepageResource)
+							found = true
 						}
 						if quantity, exists := container.Resources.Requests["hugepages-2Mi"]; exists && quantity.IsZero() == false {
 							hugepageResource := hugepageResourceData{
 								ResourceName:  "requests.hugepages-2Mi",
 								ContainerName: container.Name,
-								Path:          types.Hugepages2MRequestPath,
+								Path:          types.Hugepages2MRequestPath + "_" + container.Name,
 							}
 							hugepageResourceList = append(hugepageResourceList, hugepageResource)
+							found = true
 						}
 					}
 					if len(container.Resources.Limits) != 0 {
@@ -555,18 +610,28 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 							hugepageResource := hugepageResourceData{
 								ResourceName:  "limits.hugepages-1Gi",
 								ContainerName: container.Name,
-								Path:          types.Hugepages1GLimitPath,
+								Path:          types.Hugepages1GLimitPath + "_" + container.Name,
 							}
 							hugepageResourceList = append(hugepageResourceList, hugepageResource)
+							found = true
 						}
 						if quantity, exists := container.Resources.Limits["hugepages-2Mi"]; exists && quantity.IsZero() == false {
 							hugepageResource := hugepageResourceData{
 								ResourceName:  "limits.hugepages-2Mi",
 								ContainerName: container.Name,
-								Path:          types.Hugepages2MLimitPath,
+								Path:          types.Hugepages2MLimitPath + "_" + container.Name,
 							}
 							hugepageResourceList = append(hugepageResourceList, hugepageResource)
+							found = true
 						}
+					}
+
+					// If Hugepages are being added to Downward API, add the
+					// 'container.Name' as an environment variable to the container
+					// so container knows its name and can process hugepages properly.
+					if found {
+						patch = createEnvPatch(patch, &container, containerIndex,
+							types.EnvNameContainerName, container.Name)
 					}
 				}
 			}

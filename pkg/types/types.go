@@ -18,6 +18,7 @@ const (
 	DownwardAPIMountPath   = "/etc/podnetinfo"
 	AnnotationsPath        = "annotations"
 	LabelsPath             = "labels"
+	EnvNameContainerName   = "CONTAINER_NAME"
 	Hugepages1GRequestPath = "hugepages_1G_request"
 	Hugepages2MRequestPath = "hugepages_2M_request"
 	Hugepages1GLimitPath   = "hugepages_1G_limit"
