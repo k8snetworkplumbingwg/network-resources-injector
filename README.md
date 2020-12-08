@@ -129,3 +129,19 @@ If you wish to consume a client CA from a different location, please specify fla
 In Kubernetes 1.20, an alpha feature was added to expose the requested hugepages to the container via the Downward API.
 Being alpha, this feature is disabled in Kubernetes by default.
 If enabled when Kubernetes is deployed via `FEATURE_GATES="DownwardAPIHugePages=true"`, then Network Resource Injector can be used to mutate the pod spec to publish the hugepage data to the container. To enable this functionality in Network Resource Injector, add ```--injectHugepageDownApi``` flag to webhook binary arguments (See [server.yaml](deployments/server.yaml)).
+
+Like the other Downward API provided data, hugepage information for a pod can be located by an application at the path `/etc/podnetinfo/` in the container's file system.
+This directory will contain the request and limit information for 1Gi/2Mb.
+
+1Gi Hugepages:
+```
+    Requests: /etc/podnetinfo/hugepages_1G_request_${CONTAINER_NAME}
+    Limits: /etc/podnetinfo/hugepages_1G_limit_${CONTAINER_NAME}
+```
+2Mb: Hugepages:
+```
+    Requests: /etc/podnetinfo/hugepages_2M_request_${CONTAINER_NAME}
+    Limits: /etc/podnetinfo/hugepages_2M_limit_${CONTAINER_NAME}
+```
+
+> NOTE: To aid the application, when hugepage fields are being requested via the Downward API, Network Resource Injector also mutates the pod spec to add the environment variable `CONTAINER_NAME` with the container's name applied.
