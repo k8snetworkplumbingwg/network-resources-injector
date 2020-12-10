@@ -59,9 +59,10 @@ const (
 )
 
 var (
-	clientset             kubernetes.Interface
-	injectHugepageDownApi bool
-	resourceNameKeys      []string
+	clientset              kubernetes.Interface
+	injectHugepageDownApi  bool
+	resourceNameKeys       []string
+	honorExistingResources bool
 )
 
 func prepareAdmissionReviewResponse(allowed bool, message string, ar *v1beta1.AdmissionReview) error {
@@ -546,6 +547,79 @@ func createNodeSelectorPatch(patch []jsonPatchOperation, existing map[string]str
 	return patch
 }
 
+func createResourcePatch(patch []jsonPatchOperation, Containers []corev1.Container, resourceRequests map[string]int64) []jsonPatchOperation {
+	/* check whether resources paths exists in the first container and add as the first patches if missing */
+	if len(Containers[0].Resources.Requests) == 0 {
+		patch = patchEmptyResources(patch, 0, "requests")
+	}
+	if len(Containers[0].Resources.Limits) == 0 {
+		patch = patchEmptyResources(patch, 0, "limits")
+	}
+
+	resourceList := corev1.ResourceList{}
+	for name, number := range resourceRequests {
+		resourceList[corev1.ResourceName(name)] = *resource.NewQuantity(number, resource.DecimalSI)
+	}
+
+	for resource, quantity := range resourceList {
+		patch = append(patch, jsonPatchOperation{
+			Operation: "add",
+			Path:      "/spec/containers/0/resources/requests/" + toSafeJsonPatchKey(resource.String()), // NOTE: in future we may want to patch specific container (not always the first one)
+			Value:     quantity,
+		})
+		patch = append(patch, jsonPatchOperation{
+			Operation: "add",
+			Path:      "/spec/containers/0/resources/limits/" + toSafeJsonPatchKey(resource.String()),
+			Value:     quantity,
+		})
+	}
+	return patch
+}
+
+func updateResourcePatch(patch []jsonPatchOperation, Containers []corev1.Container, resourceRequests map[string]int64) []jsonPatchOperation {
+	var existingrequestsMap map[corev1.ResourceName]resource.Quantity
+	var existingLimitsMap map[corev1.ResourceName]resource.Quantity
+
+	if len(Containers[0].Resources.Requests) == 0 {
+		patch = patchEmptyResources(patch, 0, "requests")
+	} else {
+		existingrequestsMap = Containers[0].Resources.Requests
+	}
+	if len(Containers[0].Resources.Limits) == 0 {
+		patch = patchEmptyResources(patch, 0, "limits")
+	} else {
+		existingLimitsMap = Containers[0].Resources.Limits
+	}
+
+	resourceList := corev1.ResourceList{}
+	for name, number := range resourceRequests {
+		resourceList[corev1.ResourceName(name)] = *resource.NewQuantity(number, resource.DecimalSI)
+	}
+
+	for resourceName, quantity := range resourceList {
+		reqQuantity := quantity
+		limitQuantity := quantity
+		if value, ok := existingrequestsMap[resourceName]; ok {
+			reqQuantity.Add(value)
+		}
+		patch = append(patch, jsonPatchOperation{
+			Operation: "add",
+			Path:      "/spec/containers/0/resources/requests/" + toSafeJsonPatchKey(resourceName.String()),
+			Value:     reqQuantity,
+		})
+		if value, ok := existingLimitsMap[resourceName]; ok {
+			limitQuantity.Add(value)
+		}
+		patch = append(patch, jsonPatchOperation{
+			Operation: "add",
+			Path:      "/spec/containers/0/resources/limits/" + toSafeJsonPatchKey(resourceName.String()),
+			Value:     limitQuantity,
+		})
+	}
+
+	return patch
+}
+
 // MutateHandler handles AdmissionReview requests and sends responses back to the K8s API server
 func MutateHandler(w http.ResponseWriter, req *http.Request) {
 	glog.Infof("Received mutation request")
@@ -630,44 +704,10 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 			glog.Infof("pod doesn't need any custom network resources")
 		} else {
 			var patch []jsonPatchOperation
-			var existingrequestsMap map[corev1.ResourceName]resource.Quantity
-			var existingLimitsMap map[corev1.ResourceName]resource.Quantity
-			/* check whether resources paths exists in the first container and add as the first patches if missing */
-			if len(pod.Spec.Containers[0].Resources.Requests) == 0 {
-				patch = patchEmptyResources(patch, 0, "requests")
+			if honorExistingResources {
+				patch = updateResourcePatch(patch, pod.Spec.Containers, resourceRequests)
 			} else {
-				existingrequestsMap = pod.Spec.Containers[0].Resources.Requests.DeepCopy()
-			}
-			if len(pod.Spec.Containers[0].Resources.Limits) == 0 {
-				patch = patchEmptyResources(patch, 0, "limits")
-			} else {
-				existingLimitsMap = pod.Spec.Containers[0].Resources.Limits.DeepCopy()
-			}
-
-			resourceList := corev1.ResourceList{}
-			for name, number := range resourceRequests {
-				resourceList[corev1.ResourceName(name)] = *resource.NewQuantity(number, resource.DecimalSI)
-			}
-
-			for resourceName, quantity := range resourceList {
-				reqQuantity := quantity
-				limitQuantity := quantity
-				if value, ok := existingrequestsMap[resourceName]; ok {
-					reqQuantity.Add(value)
-				}
-				patch = append(patch, jsonPatchOperation{
-					Operation: "add",
-					Path:      "/spec/containers/0/resources/requests/" + toSafeJsonPatchKey(resourceName.String()), // NOTE: in future we may want to patch specific container (not always the first one)
-					Value:     reqQuantity,
-				})
-				if value, ok := existingLimitsMap[resourceName]; ok {
-					limitQuantity.Add(value)
-				}
-				patch = append(patch, jsonPatchOperation{
-					Operation: "add",
-					Path:      "/spec/containers/0/resources/limits/" + toSafeJsonPatchKey(resourceName.String()),
-					Value:     limitQuantity,
-				})
+				patch = createResourcePatch(patch, pod.Spec.Containers, resourceRequests)
 			}
 
 			// Determine if hugepages are being requested for a given container,
@@ -784,4 +824,9 @@ func SetupInClusterClient() {
 // hugepage request and limit for the Downward API.
 func SetInjectHugepageDownApi(hugepageFlag bool) {
 	injectHugepageDownApi = hugepageFlag
+}
+
+// SetHonorExistingResources initialize the honorExistingResources flag
+func SetHonorExistingResources(resourceHonorFlag bool) {
+	honorExistingResources = resourceHonorFlag
 }

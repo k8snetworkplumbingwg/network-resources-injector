@@ -39,6 +39,7 @@ func main() {
 	injectHugepageDownApi := flag.Bool("injectHugepageDownApi", false, "Enable hugepage requests and limits into Downward API.")
 	flag.Var(&clientCAPaths, "client-ca", "File containing client CA. This flag is repeatable if more than one client CA needs to be added to server")
 	resourceNameKeys := flag.String("network-resource-name-keys", "k8s.v1.cni.cncf.io/resourceName", "comma separated resource name keys --network-resource-name-keys.")
+	resourceHonorFlag := flag.Bool("honor-resource", false, "Honor the existing resources --honor-resource")
 	flag.Parse()
 
 	if *port < 1024 || *port > 65535 {
@@ -69,6 +70,8 @@ func main() {
 	webhook.SetupInClusterClient()
 
 	webhook.SetInjectHugepageDownApi(*injectHugepageDownApi)
+
+	webhook.SetHonorExistingResources(*resourceHonorFlag)
 
 	err = webhook.SetResourceNameKeys(*resourceNameKeys)
 	if err != nil {
