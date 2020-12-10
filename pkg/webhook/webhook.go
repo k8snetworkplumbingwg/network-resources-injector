@@ -482,22 +482,25 @@ func createEnvPatch(patch []jsonPatchOperation, container *corev1.Container,
 	return patch
 }
 
-func updateNodeSelector(existing map[string]string, desired map[string]string, patch []jsonPatchOperation) []jsonPatchOperation {
-	newExistingMap := make(map[string]string)
+func createNodeSelectorPatch(patch []jsonPatchOperation, existing map[string]string, desired map[string]string) []jsonPatchOperation {
+	targetMap := make(map[string]string)
 	if existing != nil {
 		for k, v := range existing {
-			newExistingMap[k] = v
+			targetMap[k] = v
 		}
 	}
 	if desired != nil {
 		for k, v := range desired {
-			newExistingMap[k] = v
+			targetMap[k] = v
 		}
+	}
+	if len(targetMap) == 0 {
+		return patch
 	}
 	patch = append(patch, jsonPatchOperation{
 		Operation: "add",
 		Path:      "/spec/nodeSelector",
-		Value:     newExistingMap,
+		Value:     targetMap,
 	})
 	return patch
 }
@@ -534,9 +537,6 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 
-		/* get the existing node selector map from pod spec */
-		existingNsMap := pod.Spec.NodeSelector
-
 		for _, n := range networks {
 			/* for each network in annotation ask API server for network-attachment-definition */
 			networkAttachmentDefinition, err := getNetworkAttachmentDefinition(n.Namespace, n.Name)
@@ -566,13 +566,13 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 				}
 			}
 
-			/* parse the net-attach-def annotations for node selector labels and add it to the addedNsMap */
+			/* parse the net-attach-def annotations for node selector label and add it to the desiredNsMap */
 			if ns, exists := networkAttachmentDefinition.ObjectMeta.Annotations[nodeSelectorKey]; exists {
 				nsNameValue := strings.Split(ns, "=")
 				if len(nsNameValue) == 2 {
 					desiredNsMap[strings.TrimSpace(nsNameValue[0])] = strings.TrimSpace(nsNameValue[1])
 				} else {
-					glog.Errorf("incorrect node selector string in net attach def: %s", ns)
+					desiredNsMap[strings.TrimSpace(ns)] = ""
 				}
 			}
 		}
@@ -673,9 +673,7 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 				}
 			}
 
-			/* patch the pod with additional node selector labels */
-			patch = updateNodeSelector(existingNsMap, desiredNsMap, patch)
-
+			patch = createNodeSelectorPatch(patch, pod.Spec.NodeSelector, desiredNsMap)
 			patch = createVolPatch(patch, hugepageResourceList)
 			glog.Infof("patch after all mutations: %v", patch)
 
