@@ -569,7 +569,13 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 			/* parse the net-attach-def annotations for node selector label and add it to the desiredNsMap */
 			if ns, exists := networkAttachmentDefinition.ObjectMeta.Annotations[nodeSelectorKey]; exists {
 				nsNameValue := strings.Split(ns, "=")
-				if len(nsNameValue) == 2 {
+				nsNameValueLen := len(nsNameValue)
+				if nsNameValueLen > 2 {
+					errString := fmt.Sprintf("node selector in net-attach-def %s has more than one label", n.Name)
+					glog.Error(errString)
+					http.Error(w, errString, http.StatusBadRequest)
+					return
+				} else if nsNameValueLen == 2 {
 					desiredNsMap[strings.TrimSpace(nsNameValue[0])] = strings.TrimSpace(nsNameValue[1])
 				} else {
 					desiredNsMap[strings.TrimSpace(ns)] = ""
