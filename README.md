@@ -124,7 +124,7 @@ If you wish to not add any client CAs to the servers TLS endpoint, add ```--inse
 By default, we consume the client CA from the Kubernetes service account secrets directory ```/var/run/secrets/kubernetes.io/serviceaccount/```.
 If you wish to consume a client CA from a different location, please specify flag ```--client-ca``` with a valid path. If you wish to add more than one client CA, repeat this flag multiple times. If ```--client-ca``` is defined, the default client CA from the service account secrets directory will not be consumed.
 
-## Other Configuration
+## Additional features
 ### Expose Hugepages via Downward API
 In Kubernetes 1.20, an alpha feature was added to expose the requested hugepages to the container via the Downward API.
 Being alpha, this feature is disabled in Kubernetes by default.
@@ -145,3 +145,37 @@ This directory will contain the request and limit information for 1Gi/2Mb.
 ```
 
 > NOTE: To aid the application, when hugepage fields are being requested via the Downward API, Network Resource Injector also mutates the pod spec to add the environment variable `CONTAINER_NAME` with the container's name applied.
+
+### Node Selector
+If a ```NetworkAttachmentDefinition``` CR annotation ```k8s.v1.cni.cncf.io/nodeSelector``` is present and a pod utilizes this network, Network Resources Injector will add this node selection constraint into the pod spec field ```nodeSelector```. Injecting a single node selector label is currently supported.
+
+Example:
+```yaml
+apiVersion: k8s.cni.cncf.io/v1
+kind: NetworkAttachmentDefinition
+metadata:
+  name: test-network
+  annotations:
+    k8s.v1.cni.cncf.io/nodeSelector: master=eno3
+spec:
+  config: '{
+  "cniVersion": "0.3.1",
+  "type": "macvlan",
+  "master": "eno3",
+  "mode": "bridge",
+  }'
+...
+```
+Pod spec after modification by Network Resources Injector:
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: testpod
+  annotations:
+    k8s.v1.cni.cncf.io/networks: test-network
+spec:
+ ..
+ nodeSelector:
+   master: eno3
+```
