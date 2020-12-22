@@ -1,4 +1,6 @@
-# Copyright (c) 2018 Intel Corporation
+#!/bin/bash
+
+# Copyright (c) 2020 Intel Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,14 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-default :
-	scripts/build.sh
+# Note: Execute only from the package root directory or top-level Makefile!
 
-image :
-	scripts/build-image.sh
+set -ex
 
-test :
-	scripts/test.sh
-
-vendor :
-	go mod tidy && go mod vendor
+time=$(date +'%Y-%m-%d_%H-%M-%S')
+filePath="/tmp/go-cover.$time.tmp"
+echo "Coverage profile file path: $filePath"
+go test -coverprofile="$filePath" ./...
+go tool cover -html="$filePath"
