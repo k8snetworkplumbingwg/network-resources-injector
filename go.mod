@@ -1,4 +1,4 @@
-module github.com/intel/network-resources-injector
+module github.com/k8snetworkplumbingwg/network-resources-injector
 
 go 1.13
 
