@@ -16,7 +16,7 @@
 
 set -e
 
-ORG_PATH="github.com/intel"
+ORG_PATH="github.com/k8snetworkplumbingwg"
 REPO_PATH="${ORG_PATH}/network-resources-injector"
 
 if [ ! -h .gopath/src/${REPO_PATH} ]; then

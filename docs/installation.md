@@ -3,7 +3,7 @@
 ## Building Docker image
 Go to the root directory of the Network Resources Injector and build image:
 ```
-cd $GOPATH/src/github.com/intel/network-resources-injector
+cd $GOPATH/src/github.com/k8snetworkplumbingwg/network-resources-injector
 make image
 ```
 

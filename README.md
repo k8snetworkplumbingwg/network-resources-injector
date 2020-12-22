@@ -2,7 +2,7 @@
 
 [![Weekly minutes](https://img.shields.io/badge/Weekly%20Meeting%20Minutes-Mon%203pm%20GMT-blue.svg?style=plastic)](https://docs.google.com/document/d/1sJQMHbxZdeYJPgAWK1aSt6yzZ4K_8es7woVIrwinVwI)
 
-Network Resources Injector is a Kubernetes Dynamic Admission Controller application that provides functionality of patching Kubernetes pod specifications with requests and limits of custom network resources (managed by device plugins such as [intel/sriov-network-device-plugin](https://github.com/intel/sriov-network-device-plugin)).
+Network Resources Injector is a Kubernetes Dynamic Admission Controller application that provides functionality of patching Kubernetes pod specifications with requests and limits of custom network resources (managed by device plugins such as [k8snetworkplumbingwg/sriov-network-device-plugin](https://github.com/k8snetworkplumbingwg/sriov-network-device-plugin)).
 
 ## Getting started
 
@@ -16,7 +16,7 @@ For full installation and troubleshooting steps please see [Installation guide](
 
 ## Network resources injection example
 
-To see mutating webhook in action you're going to need to add custom resources to your Kubernetes node. In real life scenarios you're going to use network resources managed by network devices plugins, such as [intel/sriov-network-device-plugin](https://github.com/intel/sriov-network-device-plugin).
+To see mutating webhook in action you're going to need to add custom resources to your Kubernetes node. In real life scenarios you're going to use network resources managed by network devices plugins, such as [k8snetworkplumbingwg/sriov-network-device-plugin](https://github.com/k8snetworkplumbingwg/sriov-network-device-plugin).
 There should be [net-attach-def CRD](https://github.com/intel/multus-cni/blob/master/examples/crd.yml) already created before you start.
 In a terminal window start proxy, so that you can easily send HTTP requests to the Kubernetes API server:
 ```

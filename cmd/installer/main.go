@@ -17,7 +17,7 @@ package main
 import (
 	"flag"
 	"github.com/golang/glog"
-	"github.com/intel/network-resources-injector/pkg/installer"
+	"github.com/k8snetworkplumbingwg/network-resources-injector/pkg/installer"
 )
 
 func main() {

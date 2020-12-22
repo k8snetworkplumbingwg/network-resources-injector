@@ -23,7 +23,7 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/golang/glog"
-	"github.com/intel/network-resources-injector/pkg/webhook"
+	"github.com/k8snetworkplumbingwg/network-resources-injector/pkg/webhook"
 )
 
 const defaultClientCa = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"

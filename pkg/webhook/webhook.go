@@ -28,7 +28,7 @@ import (
 	"github.com/pkg/errors"
 	multus "gopkg.in/intel/multus-cni.v3/types"
 
-	"github.com/intel/network-resources-injector/pkg/types"
+	"github.com/k8snetworkplumbingwg/network-resources-injector/pkg/types"
 	"k8s.io/api/admission/v1beta1"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
