@@ -556,23 +556,12 @@ func createResourcePatch(patch []jsonPatchOperation, Containers []corev1.Contain
 		patch = patchEmptyResources(patch, 0, "limits")
 	}
 
-	resourceList := corev1.ResourceList{}
-	for name, number := range resourceRequests {
-		resourceList[corev1.ResourceName(name)] = *resource.NewQuantity(number, resource.DecimalSI)
-	}
+	resourceList := *getResourceList(resourceRequests)
 
 	for resource, quantity := range resourceList {
-		patch = append(patch, jsonPatchOperation{
-			Operation: "add",
-			Path:      "/spec/containers/0/resources/requests/" + toSafeJsonPatchKey(resource.String()), // NOTE: in future we may want to patch specific container (not always the first one)
-			Value:     quantity,
-		})
-		patch = append(patch, jsonPatchOperation{
-			Operation: "add",
-			Path:      "/spec/containers/0/resources/limits/" + toSafeJsonPatchKey(resource.String()),
-			Value:     quantity,
-		})
+		patch = appendResource(patch, resource.String(), quantity, quantity)
 	}
+
 	return patch
 }
 
@@ -591,10 +580,7 @@ func updateResourcePatch(patch []jsonPatchOperation, Containers []corev1.Contain
 		existingLimitsMap = Containers[0].Resources.Limits
 	}
 
-	resourceList := corev1.ResourceList{}
-	for name, number := range resourceRequests {
-		resourceList[corev1.ResourceName(name)] = *resource.NewQuantity(number, resource.DecimalSI)
-	}
+	resourceList := *getResourceList(resourceRequests)
 
 	for resourceName, quantity := range resourceList {
 		reqQuantity := quantity
@@ -602,22 +588,37 @@ func updateResourcePatch(patch []jsonPatchOperation, Containers []corev1.Contain
 		if value, ok := existingrequestsMap[resourceName]; ok {
 			reqQuantity.Add(value)
 		}
-		patch = append(patch, jsonPatchOperation{
-			Operation: "add",
-			Path:      "/spec/containers/0/resources/requests/" + toSafeJsonPatchKey(resourceName.String()),
-			Value:     reqQuantity,
-		})
 		if value, ok := existingLimitsMap[resourceName]; ok {
 			limitQuantity.Add(value)
 		}
-		patch = append(patch, jsonPatchOperation{
-			Operation: "add",
-			Path:      "/spec/containers/0/resources/limits/" + toSafeJsonPatchKey(resourceName.String()),
-			Value:     limitQuantity,
-		})
+		patch = appendResource(patch, resourceName.String(), reqQuantity, limitQuantity)
 	}
 
 	return patch
+}
+
+func appendResource(patch []jsonPatchOperation, resourceName string, reqQuantity, limitQuantity resource.Quantity) []jsonPatchOperation {
+	patch = append(patch, jsonPatchOperation{
+		Operation: "add",
+		Path:      "/spec/containers/0/resources/requests/" + toSafeJsonPatchKey(resourceName),
+		Value:     reqQuantity,
+	})
+	patch = append(patch, jsonPatchOperation{
+		Operation: "add",
+		Path:      "/spec/containers/0/resources/limits/" + toSafeJsonPatchKey(resourceName),
+		Value:     limitQuantity,
+	})
+
+	return patch
+}
+
+func getResourceList(resourceRequests map[string]int64) *corev1.ResourceList {
+	resourceList := corev1.ResourceList{}
+	for name, number := range resourceRequests {
+		resourceList[corev1.ResourceName(name)] = *resource.NewQuantity(number, resource.DecimalSI)
+	}
+
+	return &resourceList
 }
 
 // MutateHandler handles AdmissionReview requests and sends responses back to the K8s API server
@@ -704,6 +705,7 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 			glog.Infof("pod doesn't need any custom network resources")
 		} else {
 			var patch []jsonPatchOperation
+			glog.Infof("honor-resources=%v", honorExistingResources)
 			if honorExistingResources {
 				patch = updateResourcePatch(patch, pod.Spec.Containers, resourceRequests)
 			} else {
@@ -827,6 +829,6 @@ func SetInjectHugepageDownApi(hugepageFlag bool) {
 }
 
 // SetHonorExistingResources initialize the honorExistingResources flag
-func SetHonorExistingResources(resourceHonorFlag bool) {
-	honorExistingResources = resourceHonorFlag
+func SetHonorExistingResources(resourcesHonorFlag bool) {
+	honorExistingResources = resourcesHonorFlag
 }
