@@ -574,6 +574,17 @@ func createResourcePatch(patch []jsonPatchOperation, Containers []corev1.Contain
 		patch = patchEmptyResources(patch, 0, "limits")
 	}
 
+	for resourceName := range resourceRequests {
+		for _, container := range Containers {
+			if _, exists := container.Resources.Limits[corev1.ResourceName(resourceName)]; exists {
+				delete(resourceRequests, resourceName)
+			}
+			if _, exists := container.Resources.Requests[corev1.ResourceName(resourceName)]; exists {
+				delete(resourceRequests, resourceName)
+			}
+		}
+	}
+
 	resourceList := *getResourceList(resourceRequests)
 
 	for resource, quantity := range resourceList {
