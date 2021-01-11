@@ -16,19 +16,27 @@ package main
 
 import (
 	"crypto/tls"
+	"context"
 	"flag"
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"github.com/fsnotify/fsnotify"
 	"github.com/golang/glog"
 	"github.com/k8snetworkplumbingwg/network-resources-injector/pkg/webhook"
 )
 
-const defaultClientCa = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+const (
+	defaultClientCa              = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+	customizedInjectionConfigMap = "nri-user-defined-injections"
+)
 
 func main() {
+	var namespace string
 	var clientCAPaths webhook.ClientCAFlags
 	/* load configuration */
 	port := flag.Int("port", 8443, "The port on which to serve.")
@@ -54,6 +62,10 @@ func main() {
 		clientCAPaths = append(clientCAPaths, defaultClientCa)
 	}
 
+	if namespace = os.Getenv("NAMESPACE"); namespace == "" {
+		namespace = "kube-system"
+	}
+
 	glog.Infof("starting mutating admission controller for network resources injection")
 
 	keyPair, err := webhook.NewTlsKeypairReloader(*cert, *key)
@@ -67,7 +79,7 @@ func main() {
 	}
 
 	/* init API client */
-	webhook.SetupInClusterClient()
+	clientset := webhook.SetupInClusterClient()
 
 	webhook.SetInjectHugepageDownApi(*injectHugepageDownApi)
 
@@ -169,6 +181,16 @@ func main() {
 				continue
 			}
 			glog.Infof("watcher error: %v", err)
+		case <-time.After(30 * time.Second):
+			cm, err := clientset.CoreV1().ConfigMaps(namespace).Get(
+				context.Background(), customizedInjectionConfigMap, metav1.GetOptions{})
+			if err != nil {
+				if !errors.IsNotFound(err) {
+					glog.Warningf("Failed to get configmap for customized injections: %v", err)
+				}
+				continue
+			}
+			webhook.SetCustomizedInjections(cm)
 		}
 	}
 }

@@ -20,8 +20,10 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"reflect"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/golang/glog"
 	cniv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
@@ -46,6 +48,11 @@ type jsonPatchOperation struct {
 	Value     interface{} `json:"value,omitempty"`
 }
 
+type customInjections struct {
+	sync.Mutex
+	Patchs map[string]jsonPatchOperation
+}
+
 type hugepageResourceData struct {
 	ResourceName  string
 	ContainerName string
@@ -63,6 +70,7 @@ var (
 	injectHugepageDownApi  bool
 	resourceNameKeys       []string
 	honorExistingResources bool
+	cusInjects             = &customInjections{Patchs: make(map[string]jsonPatchOperation)}
 )
 
 func prepareAdmissionReviewResponse(allowed bool, message string, ar *v1beta1.AdmissionReview) error {
@@ -621,6 +629,51 @@ func getResourceList(resourceRequests map[string]int64) *corev1.ResourceList {
 	return &resourceList
 }
 
+func createCustomizedPatch(pod corev1.Pod) ([]jsonPatchOperation, error) {
+	var customizedPatch []jsonPatchOperation
+
+	// lock for reading
+	cusInjects.Lock()
+	defer cusInjects.Unlock()
+
+	for k, v := range cusInjects.Patchs {
+		// The cusInjects will be injected when:
+		// 1. Pod labels contain the patch key defined in cusInjects, and
+		// 2. The value of patch key in pod labels(not in cusInjects) is "true"
+		if podValue, exists := pod.ObjectMeta.Labels[k]; exists && strings.ToLower(podValue) == "true" {
+			customizedPatch = append(customizedPatch, v)
+		}
+	}
+	return customizedPatch, nil
+}
+
+func getNetworkSelections(annotationKey string, pod corev1.Pod, customizedPatch []jsonPatchOperation) (string, bool) {
+	// User defined annotateKey takes precedence than customized injections
+	glog.Infof("search %s in original pod annotations", annotationKey)
+	nets, exists := pod.ObjectMeta.Annotations[annotationKey]
+	if exists {
+		glog.Infof("%s is defined in original pod annotations", annotationKey)
+		return nets, exists
+	}
+
+	glog.Infof("search %s in customized injections", annotationKey)
+	// customizedPatch may contain user defined net-attach-defs
+	if len(customizedPatch) > 0 {
+		for _, p := range customizedPatch {
+			if p.Operation == "add" && p.Path == "/metadata/annotations" {
+				for k, v := range p.Value.(map[string]interface{}) {
+					if k == annotationKey {
+						glog.Infof("%s is found in customized annotations", annotationKey)
+						return v.(string), true
+					}
+				}
+			}
+		}
+	}
+	glog.Infof("%s is not found in either pod annotations or customized injections", annotationKey)
+	return "", false
+}
+
 // MutateHandler handles AdmissionReview requests and sends responses back to the K8s API server
 func MutateHandler(w http.ResponseWriter, req *http.Request) {
 	glog.Infof("Received mutation request")
@@ -641,8 +694,13 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	defaultNetSelection, defExist := pod.ObjectMeta.Annotations[defaultNetworkAnnotationKey]
-	additionalNetSelections, addExists := pod.ObjectMeta.Annotations[networksAnnotationKey]
+	customizedPatch, err := createCustomizedPatch(pod)
+	if err != nil {
+		glog.Warningf("Error, failed to create customized injection patch, %v", err)
+	}
+
+	defaultNetSelection, defExist := getNetworkSelections(defaultNetworkAnnotationKey, pod, customizedPatch)
+	additionalNetSelections, addExists := getNetworkSelections(networksAnnotationKey, pod, customizedPatch)
 
 	if defExist || addExists {
 		/* map of resources request needed by a pod and a number of them */
@@ -772,6 +830,7 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 
 			patch = createNodeSelectorPatch(patch, pod.Spec.NodeSelector, desiredNsMap)
 			patch = createVolPatch(patch, hugepageResourceList)
+			patch = append(patch, customizedPatch...)
 			glog.Infof("patch after all mutations: %v", patch)
 
 			patchBytes, _ := json.Marshal(patch)
@@ -810,7 +869,7 @@ func SetResourceNameKeys(keys string) error {
 }
 
 // SetupInClusterClient setups K8s client to communicate with the API server
-func SetupInClusterClient() {
+func SetupInClusterClient() kubernetes.Interface {
 	/* setup Kubernetes API client */
 	config, err := rest.InClusterConfig()
 	if err != nil {
@@ -820,6 +879,7 @@ func SetupInClusterClient() {
 	if err != nil {
 		glog.Fatal(err)
 	}
+	return clientset
 }
 
 // SetInjectHugepageDownApi sets a flag to indicate whether or not to inject the
@@ -831,4 +891,42 @@ func SetInjectHugepageDownApi(hugepageFlag bool) {
 // SetHonorExistingResources initialize the honorExistingResources flag
 func SetHonorExistingResources(resourcesHonorFlag bool) {
 	honorExistingResources = resourcesHonorFlag
+}
+
+// SetCustomizedInjections sets additional injections to be applied in Pod spec
+func SetCustomizedInjections(injections *corev1.ConfigMap) {
+	// lock for writing
+	cusInjects.Lock()
+	defer cusInjects.Unlock()
+
+	var patch jsonPatchOperation
+	var cusPatchs = cusInjects.Patchs
+
+	for k, v := range injections.Data {
+		existValue, exists := cusPatchs[k]
+		// unmarshall customized injection to json patch
+		err := json.Unmarshal([]byte(v), &patch)
+		if err != nil {
+			glog.Errorf("Failed to unmarshall customized injection: %v", v)
+			continue
+		}
+		// metadata.Annotations is the only supported field for customization
+		// jsonPatchOperation.Path should be "/metadata/annotations" when customizing pod annotation
+		if patch.Path != "/metadata/annotations" {
+			glog.Errorf("Path: %v is not supported, only /metadata/annotations can be customized", patch.Path)
+			continue
+		}
+		if !exists || !reflect.DeepEqual(existValue, patch) {
+			glog.Infof("Initializing customized injections with key: %v, value: %v", k, v)
+			cusPatchs[k] = patch
+		}
+	}
+	// remove stale entries from customized configMap
+	for k, _ := range cusPatchs {
+		if _, ok := injections.Data[k]; ok {
+			continue
+		}
+		glog.Infof("Removing stale entry: %v from customized injections", k)
+		delete(cusPatchs, k)
+	}
 }
