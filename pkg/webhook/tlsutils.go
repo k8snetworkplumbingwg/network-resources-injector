@@ -22,6 +22,7 @@ import (
 	"sync"
 
 	"github.com/golang/glog"
+	"github.com/k8snetworkplumbingwg/network-resources-injector/pkg/types"
 )
 
 type tlsKeypairReloader struct {
@@ -68,8 +69,16 @@ func (keyPair *tlsKeypairReloader) GetCertificateFunc() func(*tls.ClientHelloInf
 	}
 }
 
-// NewTlsKeypairReloader reload tlsKeypairReloader struct
-func NewTlsKeypairReloader(certPath, keyPath string) (*tlsKeypairReloader, error) {
+func (keyPair *tlsKeypairReloader) GetKeyPath() string {
+	return keyPair.keyPath
+}
+
+func (keyPair *tlsKeypairReloader) GetCertPath() string {
+	return keyPair.certPath
+}
+
+//NewTlsKeyPairReloader loads a cert and key
+func NewTlsKeyPairReloader(certPath, keyPath string) (types.KeyReloader, error) {
 	result := &tlsKeypairReloader{
 		certPath: certPath,
 		keyPath:  keyPath,
@@ -84,7 +93,7 @@ func NewTlsKeypairReloader(certPath, keyPath string) (*tlsKeypairReloader, error
 }
 
 //NewClientCertPool will load a single client CA
-func NewClientCertPool(clientCaPaths *ClientCAFlags, insecure bool) (*clientCertPool, error) {
+func NewClientCertPool(clientCaPaths *ClientCAFlags, insecure bool) (types.ClientCAPool, error) {
 	pool := &clientCertPool{
 		certPaths: clientCaPaths,
 		insecure:  insecure,

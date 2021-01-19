@@ -15,18 +15,21 @@
 package main
 
 import (
-	"crypto/tls"
 	"flag"
-	"fmt"
-	"net/http"
+	"os"
 	"time"
 
-	"github.com/fsnotify/fsnotify"
 	"github.com/golang/glog"
 	"github.com/k8snetworkplumbingwg/network-resources-injector/pkg/webhook"
 )
 
-const defaultClientCa = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+const (
+	defaultClientCa = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+	readTo          = 5 * time.Second
+	writeTo         = 10 * time.Second
+	readHeaderTo    = 1 * time.Second
+	serviceTo       = 2 * time.Second
+)
 
 func main() {
 	var clientCAPaths webhook.ClientCAFlags
@@ -56,7 +59,7 @@ func main() {
 
 	glog.Infof("starting mutating admission controller for network resources injection")
 
-	keyPair, err := webhook.NewTlsKeypairReloader(*cert, *key)
+	keyPair, err := webhook.NewTlsKeyPairReloader(*cert, *key)
 	if err != nil {
 		glog.Fatalf("error load certificate: %s", err.Error())
 	}
@@ -78,97 +81,19 @@ func main() {
 		glog.Fatalf("error in setting resource name keys: %s", err.Error())
 	}
 
-	go func() {
-		/* register handlers */
-		var httpServer *http.Server
-
-		http.HandleFunc("/mutate", func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path != "/mutate" {
-				http.NotFound(w, r)
-				return
-			}
-			if r.Method != http.MethodPost {
-				http.Error(w, "Invalid HTTP verb requested", 405)
-				return
-			}
-			webhook.MutateHandler(w, r)
-		})
-
-		/* start serving */
-		httpServer = &http.Server{
-			Addr:              fmt.Sprintf("%s:%d", *address, *port),
-			ReadTimeout:       5 * time.Second,
-			WriteTimeout:      10 * time.Second,
-			MaxHeaderBytes:    1 << 20,
-			ReadHeaderTimeout: 1 * time.Second,
-			TLSConfig: &tls.Config{
-				ClientAuth:               webhook.GetClientAuth(*insecure),
-				MinVersion:               tls.VersionTLS12,
-				CurvePreferences:         []tls.CurveID{tls.CurveP521, tls.CurveP384},
-				ClientCAs:                clientCaPool.GetCertPool(),
-				PreferServerCipherSuites: true,
-				InsecureSkipVerify:       false,
-				CipherSuites: []uint16{
-					// tls 1.2
-					tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-					tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-					tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-					tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-					// tls 1.3 configuration not supported
-				},
-				GetCertificate: keyPair.GetCertificateFunc(),
-			},
-		}
-
-		err := httpServer.ListenAndServeTLS("", "")
-		if err != nil {
-			glog.Fatalf("error starting web server: %v", err)
-		}
-	}()
-
-	/* watch the cert file and restart http sever if the file updated. */
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		glog.Fatalf("error starting fsnotify watcher: %v", err)
+	watcher := webhook.NewKeyPairWatcher(keyPair, serviceTo)
+	if err = watcher.Run(); err != nil {
+		glog.Fatalf("starting TLS key & cert file watcher failed: '%s'", err.Error())
 	}
-	defer watcher.Close()
 
-	certUpdated := false
-	keyUpdated := false
+	server := webhook.NewMutateServer(*address, *port, *insecure, readTo, writeTo, readHeaderTo, serviceTo, clientCaPool, keyPair)
+	if err = server.Run(); err != nil {
+		watcher.Quit()
+		glog.Fatalf("starting HTTP server failed: '%s'", err)
+	}
 
-	for {
-		watcher.Add(*cert)
-		watcher.Add(*key)
-
-		select {
-		case event, ok := <-watcher.Events:
-			if !ok {
-				continue
-			}
-			glog.Infof("watcher event: %v", event)
-			mask := fsnotify.Create | fsnotify.Rename | fsnotify.Remove |
-				fsnotify.Write | fsnotify.Chmod
-			if (event.Op & mask) != 0 {
-				glog.Infof("modified file: %v", event.Name)
-				if event.Name == *cert {
-					certUpdated = true
-				}
-				if event.Name == *key {
-					keyUpdated = true
-				}
-				if keyUpdated && certUpdated {
-					if err := keyPair.Reload(); err != nil {
-						glog.Fatalf("Failed to reload certificate: %v", err)
-					}
-					certUpdated = false
-					keyUpdated = false
-				}
-			}
-		case err, ok := <-watcher.Errors:
-			if !ok {
-				continue
-			}
-			glog.Infof("watcher error: %v", err)
-		}
+	/* Blocks until termination or TLS key/cert file watcher or HTTP server signal occurs and stops HTTP server/file watcher */
+	if err := webhook.Watch(server, watcher, make(chan os.Signal, 1)); err != nil {
+		glog.Error(err.Error())
 	}
 }

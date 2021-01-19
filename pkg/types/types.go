@@ -14,6 +14,12 @@
 
 package types
 
+import (
+	"crypto/tls"
+	"crypto/x509"
+	"time"
+)
+
 const (
 	DownwardAPIMountPath   = "/etc/podnetinfo"
 	AnnotationsPath        = "annotations"
@@ -24,3 +30,27 @@ const (
 	Hugepages1GLimitPath   = "hugepages_1G_limit"
 	Hugepages2MLimitPath   = "hugepages_2M_limit"
 )
+
+type ClientCAPool interface {
+	Load() error
+	GetCertPool() *x509.CertPool
+}
+
+type KeyReloader interface {
+	Reload() error
+	GetCertificateFunc() func(*tls.ClientHelloInfo) (*tls.Certificate, error)
+	GetKeyPath() string
+	GetCertPath() string
+}
+
+//start and stop HTTP server - helps unit tests mocking of HTTP server
+type Server interface {
+	Start() error
+	Stop(timeout time.Duration) error
+}
+
+type Service interface {
+	Run() error
+	Quit() error
+	StatusSignal() chan struct{}
+}
