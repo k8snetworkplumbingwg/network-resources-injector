@@ -1,0 +1,16 @@
+name: Docker-build
+on: [pull_request]
+jobs:
+
+  build:
+    name: Docker build
+    runs-on: ubuntu-latest
+    env:
+      GO111MODULE: on
+      TAG: network-resources-injector:latest 
+    steps:
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v2
+
+    - name: Build Dockerfile
+      run: docker build -f Dockerfile -t ${TAG} .
