@@ -179,3 +179,7 @@ spec:
  nodeSelector:
    master: eno3
 ```
+
+## Contact Us
+
+For any questions about Network Resources Injector, feel free to ask a question in #network-resources-injector in [NPWG slack](https://npwg-team.slack.com/), or open up a GitHub issue.
