@@ -29,5 +29,5 @@ export GOBIN=${PWD}/bin
 export CGO_ENABLED=0
 export GO15VENDOREXPERIMENT=1
 
-go install -ldflags "-s -w" -buildmode=pie -tags no_openssl "$@" ${REPO_PATH}/cmd/installer
-go install -ldflags "-s -w" -buildmode=pie -tags no_openssl "$@" ${REPO_PATH}/cmd/webhook
+go install -ldflags "-s -w" -tags no_openssl "$@" ${REPO_PATH}/cmd/installer
+go install -ldflags "-s -w" -tags no_openssl "$@" ${REPO_PATH}/cmd/webhook
