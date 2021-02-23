@@ -13,7 +13,6 @@ import (
 	"k8s.io/client-go/util/homedir"
 )
 
-
 const (
 	testNetworkName    = "foo-network"
 	testNetworkResName = "example.com/foo"
@@ -32,7 +31,7 @@ type ClientSet struct {
 	coreclient.CoreV1Interface
 }
 
-func init()  {
+func init() {
 	if home := homedir.HomeDir(); home != "" {
 		kubeConfigPath = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "path to your kubeconfig file")
 	} else {

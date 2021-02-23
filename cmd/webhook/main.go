@@ -15,23 +15,23 @@
 package main
 
 import (
-	"crypto/tls"
 	"context"
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"net/http"
 	"os"
 	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"github.com/fsnotify/fsnotify"
 	"github.com/golang/glog"
 	"github.com/k8snetworkplumbingwg/network-resources-injector/pkg/webhook"
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
-	defaultClientCa              = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+	defaultClientCa               = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
 	userDefinedInjectionConfigMap = "nri-user-defined-injections"
 )
 
@@ -44,7 +44,7 @@ func main() {
 	cert := flag.String("tls-cert-file", "cert.pem", "File containing the default x509 Certificate for HTTPS.")
 	key := flag.String("tls-private-key-file", "key.pem", "File containing the default x509 private key matching --tls-cert-file.")
 	insecure := flag.Bool("insecure", false, "Disable adding client CA to server TLS endpoint --insecure")
-	injectHugepageDownApi := flag.Bool("injectHugepageDownApi", false, "Enable hugepage requests and limits into Downward API.")
+	injectHugepageDownAPI := flag.Bool("injectHugepageDownApi", false, "Enable hugepage requests and limits into Downward API.")
 	flag.Var(&clientCAPaths, "client-ca", "File containing client CA. This flag is repeatable if more than one client CA needs to be added to server")
 	resourceNameKeys := flag.String("network-resource-name-keys", "k8s.v1.cni.cncf.io/resourceName", "comma separated resource name keys --network-resource-name-keys.")
 	resourcesHonorFlag := flag.Bool("honor-resources", false, "Honor the existing requested resources requests & limits --honor-resources")
@@ -68,7 +68,7 @@ func main() {
 
 	glog.Infof("starting mutating admission controller for network resources injection")
 
-	keyPair, err := webhook.NewTlsKeypairReloader(*cert, *key)
+	keyPair, err := webhook.NewTLSKeypairReloader(*cert, *key)
 	if err != nil {
 		glog.Fatalf("error load certificate: %s", err.Error())
 	}
@@ -81,7 +81,7 @@ func main() {
 	/* init API client */
 	clientset := webhook.SetupInClusterClient()
 
-	webhook.SetInjectHugepageDownApi(*injectHugepageDownApi)
+	webhook.SetInjectHugepageDownAPI(*injectHugepageDownAPI)
 
 	webhook.SetHonorExistingResources(*resourcesHonorFlag)
 
@@ -149,8 +149,14 @@ func main() {
 	keyUpdated := false
 
 	for {
-		watcher.Add(*cert)
-		watcher.Add(*key)
+		err := watcher.Add(*cert)
+		if err != nil {
+			glog.Fatalf("error adding cert: %v", err)
+		}
+		err = watcher.Add(*key)
+		if err != nil {
+			glog.Fatalf("error adding key: %v", err)
+		}
 
 		select {
 		case event, ok := <-watcher.Events:

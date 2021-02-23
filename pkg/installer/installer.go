@@ -60,7 +60,7 @@ func getSignedCertificate(request []byte) ([]byte, error) {
 	csr, err := clientset.CertificatesV1beta1().CertificateSigningRequests().Get(context.TODO(), csrName, metav1.GetOptions{})
 	if csr != nil || err == nil {
 		glog.Infof("CSR %s already exists, removing it first", csrName)
-		clientset.CertificatesV1beta1().CertificateSigningRequests().Delete(context.TODO(), csrName, metav1.DeleteOptions{})
+		_ = clientset.CertificatesV1beta1().CertificateSigningRequests().Delete(context.TODO(), csrName, metav1.DeleteOptions{})
 	}
 
 	glog.Infof("creating new CSR %s", csrName)
@@ -101,7 +101,10 @@ func getSignedCertificate(request []byte) ([]byte, error) {
 	/* wait for the cert to be issued */
 	glog.Infof("waiting for the signed certificate to be issued...")
 	start := time.Now()
-	for range time.Tick(time.Second) {
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
 		csr, err = clientset.CertificatesV1beta1().CertificateSigningRequests().Get(context.TODO(), csrName, metav1.GetOptions{})
 		if err != nil {
 			return nil, errors.Wrap(err, "error getting signed ceritificate from the API server")
@@ -216,18 +219,6 @@ func removeMutatingWebhookIfExists(configName string) {
 			glog.Errorf("error trying to remove mutating webhook configuration: %s", err)
 		}
 		glog.Infof("mutating webhook configuration %s removed", configName)
-	}
-}
-
-func removeSecretIfExists(secretName string) {
-	secret, err := clientset.CoreV1().Secrets(namespace).Get(context.TODO(), secretName, metav1.GetOptions{})
-	if secret != nil && err == nil {
-		glog.Infof("secret %s already exists, removing it first", secretName)
-		err := clientset.CoreV1().Secrets(namespace).Delete(context.TODO(), secretName, metav1.DeleteOptions{})
-		if err != nil {
-			glog.Errorf("error trying to remove secret: %s", err)
-		}
-		glog.Infof("secret %s removed", secretName)
 	}
 }
 
