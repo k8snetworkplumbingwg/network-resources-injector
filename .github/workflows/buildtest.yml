@@ -9,9 +9,6 @@ jobs:
   build:
     name: Build and test
     runs-on: ubuntu-latest
-    if: >
-      (( github.event.pull_request.head.repo.owner.login != github.event.pull_request.base.repo.owner.login ) &&
-        github.event_name == 'pull_request' ) || (github.event_name == 'push' && github.event.commits != '[]' )
     env:
       GO111MODULE: on
       TARGET: amd64
