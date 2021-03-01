@@ -1,6 +1,10 @@
 #Originally from https://raw.githubusercontent.com/intel/multus-cni/master/.github/workflows/go-build-test-amd64.yml 
 name: Go-build-and-test-amd64
-on: [push, pull_request]
+on:
+    push:
+    pull_request:
+    schedule:
+      - cron: "0 10 * * *" # everyday at 10 am
 jobs:
   build:
     name: Build and test
