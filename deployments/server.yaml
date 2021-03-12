@@ -75,6 +75,13 @@ spec:
     volumeMounts:
     - name: tls
       mountPath: /etc/tls
+    resources:
+      requests:
+        memory: "50Mi"
+        cpu: "250m"
+      limits:
+        memory: "200Mi"
+        cpu: "500m"
   volumes:
   - name: tls
     emptyDir: {}
