@@ -68,8 +68,10 @@ spec:
     args:
     - -name=network-resources-injector
     - -namespace=kube-system
-    - -alsologtostderr
+    - -logtostderr
     securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
     volumeMounts:
     - name: tls
       mountPath: /etc/tls
