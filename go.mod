@@ -21,3 +21,5 @@ replace (
 	github.com/gogo/protobuf => github.com/gogo/protobuf v1.3.2
 	k8s.io/client-go => k8s.io/client-go v0.18.5
 )
+
+replace github.com/containernetworking/cni => github.com/containernetworking/cni v0.8.1
