@@ -32,7 +32,7 @@ import (
 
 const (
 	defaultClientCa              = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
-	customizedInjectionConfigMap = "nri-user-defined-injections"
+	userDefinedInjectionConfigMap = "nri-user-defined-injections"
 )
 
 func main() {
@@ -183,10 +183,10 @@ func main() {
 			glog.Infof("watcher error: %v", err)
 		case <-time.After(30 * time.Second):
 			cm, err := clientset.CoreV1().ConfigMaps(namespace).Get(
-				context.Background(), customizedInjectionConfigMap, metav1.GetOptions{})
+				context.Background(), userDefinedInjectionConfigMap, metav1.GetOptions{})
 			if err != nil {
 				if !errors.IsNotFound(err) {
-					glog.Warningf("Failed to get configmap for customized injections: %v", err)
+					glog.Warningf("Failed to get configmap for user-defined injections: %v", err)
 				}
 				continue
 			}

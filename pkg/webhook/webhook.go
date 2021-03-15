@@ -48,7 +48,7 @@ type jsonPatchOperation struct {
 	Value     interface{} `json:"value,omitempty"`
 }
 
-type customInjections struct {
+type userDefinedInjections struct {
 	sync.Mutex
 	Patchs map[string]jsonPatchOperation
 }
@@ -70,7 +70,7 @@ var (
 	injectHugepageDownApi  bool
 	resourceNameKeys       []string
 	honorExistingResources bool
-	cusInjects             = &customInjections{Patchs: make(map[string]jsonPatchOperation)}
+	userDefinedInjects     = &userDefinedInjections{Patchs: make(map[string]jsonPatchOperation)}
 )
 
 func prepareAdmissionReviewResponse(allowed bool, message string, ar *v1beta1.AdmissionReview) error {
@@ -630,25 +630,25 @@ func getResourceList(resourceRequests map[string]int64) *corev1.ResourceList {
 }
 
 func createCustomizedPatch(pod corev1.Pod) ([]jsonPatchOperation, error) {
-	var customizedPatch []jsonPatchOperation
+	var userDefinedPatch []jsonPatchOperation
 
 	// lock for reading
-	cusInjects.Lock()
-	defer cusInjects.Unlock()
+	userDefinedInjects.Lock()
+	defer userDefinedInjects.Unlock()
 
-	for k, v := range cusInjects.Patchs {
-		// The cusInjects will be injected when:
-		// 1. Pod labels contain the patch key defined in cusInjects, and
-		// 2. The value of patch key in pod labels(not in cusInjects) is "true"
+	for k, v := range userDefinedInjects.Patchs {
+		// The userDefinedInjects will be injected when:
+		// 1. Pod labels contain the patch key defined in userDefinedInjects, and
+		// 2. The value of patch key in pod labels(not in userDefinedInjects) is "true"
 		if podValue, exists := pod.ObjectMeta.Labels[k]; exists && strings.ToLower(podValue) == "true" {
-			customizedPatch = append(customizedPatch, v)
+			userDefinedPatch = append(userDefinedPatch, v)
 		}
 	}
-	return customizedPatch, nil
+	return userDefinedPatch, nil
 }
 
-func getNetworkSelections(annotationKey string, pod corev1.Pod, customizedPatch []jsonPatchOperation) (string, bool) {
-	// User defined annotateKey takes precedence than customized injections
+func getNetworkSelections(annotationKey string, pod corev1.Pod, userDefinedPatch []jsonPatchOperation) (string, bool) {
+	// User defined annotateKey takes precedence than userDefined injections
 	glog.Infof("search %s in original pod annotations", annotationKey)
 	nets, exists := pod.ObjectMeta.Annotations[annotationKey]
 	if exists {
@@ -656,21 +656,21 @@ func getNetworkSelections(annotationKey string, pod corev1.Pod, customizedPatch 
 		return nets, exists
 	}
 
-	glog.Infof("search %s in customized injections", annotationKey)
-	// customizedPatch may contain user defined net-attach-defs
-	if len(customizedPatch) > 0 {
-		for _, p := range customizedPatch {
+	glog.Infof("search %s in user-defined injections", annotationKey)
+	// userDefinedPatch may contain user defined net-attach-defs
+	if len(userDefinedPatch) > 0 {
+		for _, p := range userDefinedPatch {
 			if p.Operation == "add" && p.Path == "/metadata/annotations" {
 				for k, v := range p.Value.(map[string]interface{}) {
 					if k == annotationKey {
-						glog.Infof("%s is found in customized annotations", annotationKey)
+						glog.Infof("%s is found in user-defined annotations", annotationKey)
 						return v.(string), true
 					}
 				}
 			}
 		}
 	}
-	glog.Infof("%s is not found in either pod annotations or customized injections", annotationKey)
+	glog.Infof("%s is not found in either pod annotations or user-defined injections", annotationKey)
 	return "", false
 }
 
@@ -694,13 +694,13 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	customizedPatch, err := createCustomizedPatch(pod)
+	userDefinedPatch, err := createCustomizedPatch(pod)
 	if err != nil {
-		glog.Warningf("Error, failed to create customized injection patch, %v", err)
+		glog.Warningf("Error, failed to create user-defined injection patch, %v", err)
 	}
 
-	defaultNetSelection, defExist := getNetworkSelections(defaultNetworkAnnotationKey, pod, customizedPatch)
-	additionalNetSelections, addExists := getNetworkSelections(networksAnnotationKey, pod, customizedPatch)
+	defaultNetSelection, defExist := getNetworkSelections(defaultNetworkAnnotationKey, pod, userDefinedPatch)
+	additionalNetSelections, addExists := getNetworkSelections(networksAnnotationKey, pod, userDefinedPatch)
 
 	if defExist || addExists {
 		/* map of resources request needed by a pod and a number of them */
@@ -830,7 +830,7 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 
 			patch = createNodeSelectorPatch(patch, pod.Spec.NodeSelector, desiredNsMap)
 			patch = createVolPatch(patch, hugepageResourceList)
-			patch = append(patch, customizedPatch...)
+			patch = append(patch, userDefinedPatch...)
 			glog.Infof("patch after all mutations: %v", patch)
 
 			patchBytes, _ := json.Marshal(patch)
@@ -896,37 +896,37 @@ func SetHonorExistingResources(resourcesHonorFlag bool) {
 // SetCustomizedInjections sets additional injections to be applied in Pod spec
 func SetCustomizedInjections(injections *corev1.ConfigMap) {
 	// lock for writing
-	cusInjects.Lock()
-	defer cusInjects.Unlock()
+	userDefinedInjects.Lock()
+	defer userDefinedInjects.Unlock()
 
 	var patch jsonPatchOperation
-	var cusPatchs = cusInjects.Patchs
+	var userDefinedPatchs = userDefinedInjects.Patchs
 
 	for k, v := range injections.Data {
-		existValue, exists := cusPatchs[k]
-		// unmarshall customized injection to json patch
+		existValue, exists := userDefinedPatchs[k]
+		// unmarshall userDefined injection to json patch
 		err := json.Unmarshal([]byte(v), &patch)
 		if err != nil {
-			glog.Errorf("Failed to unmarshall customized injection: %v", v)
+			glog.Errorf("Failed to unmarshall user-defined injection: %v", v)
 			continue
 		}
-		// metadata.Annotations is the only supported field for customization
-		// jsonPatchOperation.Path should be "/metadata/annotations" when customizing pod annotation
+		// metadata.Annotations is the only supported field for user definition
+		// jsonPatchOperation.Path should be "/metadata/annotations"
 		if patch.Path != "/metadata/annotations" {
-			glog.Errorf("Path: %v is not supported, only /metadata/annotations can be customized", patch.Path)
+			glog.Errorf("Path: %v is not supported, only /metadata/annotations can be defined by user", patch.Path)
 			continue
 		}
 		if !exists || !reflect.DeepEqual(existValue, patch) {
-			glog.Infof("Initializing customized injections with key: %v, value: %v", k, v)
-			cusPatchs[k] = patch
+			glog.Infof("Initializing user-defined injections with key: %v, value: %v", k, v)
+			userDefinedPatchs[k] = patch
 		}
 	}
-	// remove stale entries from customized configMap
-	for k, _ := range cusPatchs {
+	// remove stale entries from userDefined configMap
+	for k, _ := range userDefinedPatchs {
 		if _, ok := injections.Data[k]; ok {
 			continue
 		}
-		glog.Infof("Removing stale entry: %v from customized injections", k)
-		delete(cusPatchs, k)
+		glog.Infof("Removing stale entry: %v from user-defined injections", k)
+		delete(userDefinedPatchs, k)
 	}
 }

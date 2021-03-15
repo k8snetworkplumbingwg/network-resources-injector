@@ -128,10 +128,10 @@ var _ = Describe("Webhook", func() {
 		})
 	})
 
-	DescribeTable("Create customized patchs",
+	DescribeTable("Create user-defined patchs",
 
-		func(pod corev1.Pod, cusInjectPatchs map[string]jsonPatchOperation, out []jsonPatchOperation) {
-			cusInjects.Patchs = cusInjectPatchs
+		func(pod corev1.Pod, userDefinedInjectPatchs map[string]jsonPatchOperation, out []jsonPatchOperation) {
+			userDefinedInjects.Patchs = userDefinedInjectPatchs
 			appliedPatchs, _ := createCustomizedPatch(pod)
 			Expect(appliedPatchs).Should(Equal(out))
 		},
@@ -218,14 +218,14 @@ var _ = Describe("Webhook", func() {
 				{
 					Operation: "add",
 					Path: "/metadata/annotations",
-					Value: map[string]interface{}{"k8s.v1.cni.cncf.io/networks": "sriov-net-custom"},
+					Value: map[string]interface{}{"k8s.v1.cni.cncf.io/networks": "sriov-net-user-defined"},
 				},
 			},
 			"sriov-net",
 			true,
 		),
 		Entry(
-			"get from pod customized annotation",
+			"get from pod user-defined annotation",
 			"k8s.v1.cni.cncf.io/networks",
 			corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
@@ -238,14 +238,14 @@ var _ = Describe("Webhook", func() {
 				{
 					Operation: "add",
 					Path: "/metadata/annotations",
-					Value: map[string]interface{}{"k8s.v1.cni.cncf.io/networks": "sriov-net-custom"},
+					Value: map[string]interface{}{"k8s.v1.cni.cncf.io/networks": "sriov-net-user-defined"},
 				},
 			},
-			"sriov-net-custom",
+			"sriov-net-user-defined",
 			true,
 		),
 		Entry(
-			"get from pod customized annotation",
+			"get from pod user-defined annotation",
 			"k8s.v1.cni.cncf.io/networks",
 			corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
@@ -258,7 +258,7 @@ var _ = Describe("Webhook", func() {
 				{
 					Operation: "add",
 					Path: "/metadata/annotations",
-					Value: map[string]interface{}{"v1.multus-cni.io/default-network": "sriov-net-custom"},
+					Value: map[string]interface{}{"v1.multus-cni.io/default-network": "sriov-net-user-defined"},
 				},
 			},
 			"",
@@ -266,11 +266,11 @@ var _ = Describe("Webhook", func() {
 		),
 	)
 
-	DescribeTable("Setting customized injections",
+	DescribeTable("Setting user-defined injections",
 
 		func(in *corev1.ConfigMap, existing map[string]jsonPatchOperation, out map[string]jsonPatchOperation) {
 			SetCustomizedInjections(in)
-			Expect(cusInjects.Patchs).Should(Equal(out))
+			Expect(userDefinedInjects.Patchs).Should(Equal(out))
 		},
 		Entry(
 			"patch - empty config map",
@@ -335,7 +335,7 @@ var _ = Describe("Webhook", func() {
 			map[string]jsonPatchOperation{},
 		),
 		Entry(
-			"patch - overwrite existing cusInjects",
+			"patch - overwrite existing userDefinedInjects",
 			&corev1.ConfigMap{
 				Data: map[string]string{
 					"nri-inject-annotation": "{\"op\": \"add\", \"path\": \"/metadata/annotations\", \"value\": {\"v1.multus-cni.io/default-network\": \"sriov-net-new\"}}"},
