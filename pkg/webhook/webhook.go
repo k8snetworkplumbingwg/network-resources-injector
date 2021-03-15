@@ -758,11 +758,10 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-
+		var patch []jsonPatchOperation
 		if len(resourceRequests) == 0 {
 			glog.Infof("pod doesn't need any custom network resources")
 		} else {
-			var patch []jsonPatchOperation
 			glog.Infof("honor-resources=%v", honorExistingResources)
 			if honorExistingResources {
 				patch = updateResourcePatch(patch, pod.Spec.Containers, resourceRequests)
@@ -827,19 +826,18 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 					}
 				}
 			}
-
-			patch = createNodeSelectorPatch(patch, pod.Spec.NodeSelector, desiredNsMap)
 			patch = createVolPatch(patch, hugepageResourceList)
 			patch = append(patch, userDefinedPatch...)
-			glog.Infof("patch after all mutations: %v", patch)
-
-			patchBytes, _ := json.Marshal(patch)
-			ar.Response.Patch = patchBytes
-			ar.Response.PatchType = func() *v1beta1.PatchType {
-				pt := v1beta1.PatchTypeJSONPatch
-				return &pt
-			}()
 		}
+		patch = createNodeSelectorPatch(patch, pod.Spec.NodeSelector, desiredNsMap)
+		glog.Infof("patch after all mutations: %v", patch)
+
+		patchBytes, _ := json.Marshal(patch)
+		ar.Response.Patch = patchBytes
+		ar.Response.PatchType = func() *v1beta1.PatchType {
+			pt := v1beta1.PatchTypeJSONPatch
+			return &pt
+		}()
 	} else {
 		/* network annotation not provided or empty */
 		glog.Infof("pod spec doesn't have network annotations. Skipping...")
