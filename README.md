@@ -180,6 +180,73 @@ spec:
    master: eno3
 ```
 
+### User Defined Injections
+
+User Defined injections allows user to define additional injections (besides what's supported in NRI, such as ResourceName, Downward API volumes etc) in Kubernetes ConfigMap and request additional injection for individual pod based on pod label. Currently user defined injection only support injecting pod annotations.
+
+In order to use this feature, user needs to create the user defined injection ConfigMap with name `nri-user-defined-injections` in the namespace where NRI was deployed in (`kube-system` namespace is used when there is no `NAMESPACE` environment variable passed to NRI). The data entry in ConfigMap is in the format of key:value pair. Key is a user defined label that will be used to match with pod labels, Value is the actual injection in the format as defined by [RFC6902](https://tools.ietf.org/html/rfc6902) that will be applied to pod manifest. NRI would listen to the creation/update/deletion of this ConfigMap and update its internal data structure every 30 seconds so that subsquential creation of pods will be evaluated against the latest user defined injections.
+
+Metadata.Annotations in Pod definition is the only supported field for customization, whose `path` should be "/metadata/annotations".
+
+Below is an example of user defined injection ConfigMap:
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nri-user-defined-injections
+  namespace: kube-system
+data:
+  feature.pod.kubernetes.io/sriov-network: '{"op": "add", "path": "/metadata/annotations", "value": {"k8s.v1.cni.cncf.io/networks": "sriov-net-attach-def"}}'
+```
+
+`feature.pod.kubernetes.io/sriov-network` is a user defined label to request additional networks. Every pod that contains this label with a value set to `"true"` will be applied with the patch that's defined in the following json string.
+
+`'{"op": "add", "path": "/metadata/annotations", "value": {"k8s.v1.cni.cncf.io/networks": "sriov-net -attach-def"}}` defines how/where/what the patch shall be applied.
+
+`"op": "add"` is the action for user defined injection. In above case, it requests to add the `value` to `path` in pod manifests.
+
+`"path": "/metadata/annotations"` is the path in pod manifest to be updated.
+
+`"value": {"k8s.v1.cni.cncf.io/networks": "sriov-net-attach-def"}}` is the value to be updated in the given `path`.
+
+For a pod to request user defined injection, one of its labels shall match with the labels defined in user defined injection ConfigMap.
+For example, with the below pod manifest:
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: testpod
+  labels:
+   feature.pod.kubernetes.io/sriov-network: "true"
+spec:
+  containers:
+  - name: app
+    image: centos:7
+    command: [ "/bin/bash", "-c", "--" ]
+    args: [ "while true; do sleep 300000; done;" ]
+```
+
+NRI would update pod manifest to:
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: testpod
+  labels:
+   feature.pod.kubernetes.io/sriov-network: "true"
+  annotations:
+    k8s.v1.cni.cncf.io/networks: sriov-net-attach-def
+spec:
+  containers:
+  - name: app
+    image: centos:7
+    command: [ "/bin/bash", "-c", "--" ]
+    args: [ "while true; do sleep 300000; done;" ]
+```
+
 ## Contact Us
 
 For any questions about Network Resources Injector, feel free to ask a question in #network-resources-injector in [NPWG slack](https://npwg-team.slack.com/), or open up a GitHub issue. Request an invite to NPWG slack [here](https://intel-corp.herokuapp.com/).
