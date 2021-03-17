@@ -13,7 +13,7 @@ if [ ! -d "${root}/bin" ]; then
 fi
 
 echo "retrieving kind"
-curl --max-time 10 --retry 10 --retry-delay 5 --retry-max-time 60 -Lo "${root}/bin/kind" "${KIND_BINARY_URL}"
+curl --max-time 20 --retry 10 --retry-delay 5 --retry-max-time 300 -Lo "${root}/bin/kind" "${KIND_BINARY_URL}"
 chmod +x "${root}/bin/kind"
 
 echo "retrieving kubectl"
