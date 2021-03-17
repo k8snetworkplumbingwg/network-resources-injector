@@ -296,6 +296,7 @@ Deploy KinD and run tests
 ```
 $ make e2e
 ```
+Note: For all tests to run you will need to provision your host with 3 Gi and 1024 Mi hugepages.
 
 Cleanup KinD deployment
 

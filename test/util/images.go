@@ -6,7 +6,7 @@ import (
 )
 
 var (
-	registry string
+	registry  string
 	testImage string
 )
 
