@@ -11,7 +11,7 @@ require (
 	github.com/onsi/gomega v1.10.1
 	github.com/pkg/errors v0.9.1
 	golang.org/x/crypto v0.0.0-20201221181555-eec23a3978ad // indirect
-	gopkg.in/intel/multus-cni.v3 v3.4.2
+	gopkg.in/intel/multus-cni.v3 v3.7.1
 	k8s.io/api v0.18.5
 	k8s.io/apimachinery v0.18.5
 	k8s.io/client-go v11.0.0+incompatible
