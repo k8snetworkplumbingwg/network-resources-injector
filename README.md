@@ -130,7 +130,7 @@ In Kubernetes 1.20, an alpha feature was added to expose the requested hugepages
 Being alpha, this feature is disabled in Kubernetes by default.
 If enabled when Kubernetes is deployed via `FEATURE_GATES="DownwardAPIHugePages=true"`, then Network Resource Injector can be used to mutate the pod spec to publish the hugepage data to the container. To enable this functionality in Network Resource Injector, add ```--injectHugepageDownApi``` flag to webhook binary arguments (See [server.yaml](deployments/server.yaml)).
 
-> NOTE: Please note that the Network Resource Injector does not adds resources to the POD specification. It means that user has to explicitly add it. This feature only expose it to Downward API. More information about hugepages can be found within Kubernetes [specification](https://kubernetes.io/docs/tasks/manage-hugepages/scheduling-hugepages/). Part of example definition:
+> NOTE: Please note that the Network Resource Injector does not add hugepage resources to the POD specification. It means that user has to explicitly add it. This feature only exposes it to Downward API. More information about hugepages can be found within Kubernetes [specification](https://kubernetes.io/docs/tasks/manage-hugepages/scheduling-hugepages/). Snippet of how to request hugepage resources in pod spec:
 ```
 spec:
   containers:
