@@ -17,9 +17,9 @@
 # Note: Execute only from the package root directory or top-level Makefile!
 
 set -ex
-
+root="$(dirname "$0")/.."
 time=$(date +'%Y-%m-%d_%H-%M-%S')
 filePath="/tmp/go-cover.$time.tmp"
 echo "Coverage profile file path: $filePath"
-go test -coverprofile="$filePath" ./...
+go test -coverprofile="$filePath" "./${root}/pkg/..."
 go tool cover -html="$filePath"

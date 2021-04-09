@@ -261,6 +261,26 @@ spec:
     args: [ "while true; do sleep 300000; done;" ]
 ```
 
+## Test
+### Unit tests
+
+```
+$ make test
+```
+
+### E2E tests using Kubernetes in Docker (KinD)
+Deploy KinD and run tests
+
+```
+$ make e2e
+```
+
+Cleanup KinD deployment
+
+```
+make e2e-clean
+```
+
 ## Contact Us
 
 For any questions about Network Resources Injector, feel free to ask a question in #network-resources-injector in [NPWG slack](https://npwg-team.slack.com/), or open up a GitHub issue. Request an invite to NPWG slack [here](https://intel-corp.herokuapp.com/).
