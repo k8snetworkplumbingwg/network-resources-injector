@@ -187,8 +187,8 @@ func main() {
 			if err != nil {
 				if !errors.IsNotFound(err) {
 					glog.Warningf("Failed to get configmap for user-defined injections: %v", err)
+					continue
 				}
-				continue
 			}
 			webhook.SetCustomizedInjections(cm)
 		}
