@@ -629,6 +629,22 @@ func getResourceList(resourceRequests map[string]int64) *corev1.ResourceList {
 	return &resourceList
 }
 
+func appendPodAnnotation(patch []jsonPatchOperation, pod corev1.Pod, userDefinedPatch jsonPatchOperation) []jsonPatchOperation {
+	annotMap := make(map[string]string)
+	for k, v := range pod.ObjectMeta.Annotations {
+		annotMap[k] = v
+	}
+	for k, v := range userDefinedPatch.Value.(map[string]interface{}) {
+		annotMap[k] = v.(string)
+	}
+	patch = append(patch, jsonPatchOperation{
+		Operation: "add",
+		Path:      "/metadata/annotations",
+		Value:     annotMap,
+	})
+	return patch
+}
+
 func createCustomizedPatch(pod corev1.Pod) ([]jsonPatchOperation, error) {
 	var userDefinedPatch []jsonPatchOperation
 
@@ -645,6 +661,15 @@ func createCustomizedPatch(pod corev1.Pod) ([]jsonPatchOperation, error) {
 		}
 	}
 	return userDefinedPatch, nil
+}
+
+func appendCustomizedPatch(patch []jsonPatchOperation, pod corev1.Pod, userDefinedPatch []jsonPatchOperation) []jsonPatchOperation{
+	for _, p := range userDefinedPatch {
+		if p.Path == "/metadata/annotations" {
+			patch = appendPodAnnotation(patch, pod, p)
+		}
+	}
+	return patch
 }
 
 func getNetworkSelections(annotationKey string, pod corev1.Pod, userDefinedPatch []jsonPatchOperation) (string, bool) {
@@ -827,7 +852,7 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 				}
 			}
 			patch = createVolPatch(patch, hugepageResourceList)
-			patch = append(patch, userDefinedPatch...)
+			patch = appendCustomizedPatch(patch, pod, userDefinedPatch)
 		}
 		patch = createNodeSelectorPatch(patch, pod.Spec.NodeSelector, desiredNsMap)
 		glog.Infof("patch after all mutations: %v", patch)
