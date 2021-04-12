@@ -53,7 +53,7 @@ func (keyPair *tlsKeypairReloader) Reload() error {
 	if err != nil {
 		return err
 	}
-	glog.Infof("cetificate reloaded")
+	glog.V(2).Infof("cetificate reloaded")
 	keyPair.certMutex.Lock()
 	defer keyPair.certMutex.Unlock()
 	keyPair.cert = &newCert
