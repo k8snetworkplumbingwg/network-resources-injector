@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -407,22 +408,30 @@ func patchEmptyResources(patch []jsonPatchOperation, containerIndex uint, key st
 	return patch
 }
 
-func addVolDownwardAPI(patch []jsonPatchOperation, hugepageResourceList []hugepageResourceData) []jsonPatchOperation {
-	labels := corev1.ObjectFieldSelector{
-		FieldPath: "metadata.labels",
+func addVolDownwardAPI(patch []jsonPatchOperation, hugepageResourceList []hugepageResourceData, pod *corev1.Pod) []jsonPatchOperation {
+	dAPIItems := []corev1.DownwardAPIVolumeFile{}
+
+	if pod.Labels != nil && len(pod.Labels) > 0 {
+		labels := corev1.ObjectFieldSelector{
+			FieldPath: "metadata.labels",
+		}
+		dAPILabels := corev1.DownwardAPIVolumeFile{
+			Path:     types.LabelsPath,
+			FieldRef: &labels,
+		}
+		dAPIItems = append(dAPIItems, dAPILabels)
 	}
-	dAPILabels := corev1.DownwardAPIVolumeFile{
-		Path:     types.LabelsPath,
-		FieldRef: &labels,
+
+	if pod.Annotations != nil && len(pod.Annotations) > 0 {
+		annotations := corev1.ObjectFieldSelector{
+			FieldPath: "metadata.annotations",
+		}
+		dAPIAnnotations := corev1.DownwardAPIVolumeFile{
+			Path:     types.AnnotationsPath,
+			FieldRef: &annotations,
+		}
+		dAPIItems = append(dAPIItems, dAPIAnnotations)
 	}
-	annotations := corev1.ObjectFieldSelector{
-		FieldPath: "metadata.annotations",
-	}
-	dAPIAnnotations := corev1.DownwardAPIVolumeFile{
-		Path:     types.AnnotationsPath,
-		FieldRef: &annotations,
-	}
-	dAPIItems := []corev1.DownwardAPIVolumeFile{dAPILabels, dAPIAnnotations}
 
 	for _, hugepageResource := range hugepageResourceList {
 		hugepageSelector := corev1.ResourceFieldSelector{
@@ -457,26 +466,27 @@ func addVolDownwardAPI(patch []jsonPatchOperation, hugepageResourceList []hugepa
 	return patch
 }
 
-func addVolumeMount(patch []jsonPatchOperation) []jsonPatchOperation {
+func addVolumeMount(patch []jsonPatchOperation, containersLen int) []jsonPatchOperation {
 
 	vm := corev1.VolumeMount{
 		Name:      "podnetinfo",
-		ReadOnly:  false,
+		ReadOnly:  true,
 		MountPath: types.DownwardAPIMountPath,
 	}
-
-	patch = append(patch, jsonPatchOperation{
-		Operation: "add",
-		Path:      "/spec/containers/0/volumeMounts/-", // NOTE: in future we may want to patch specific container (not always the first one)
-		Value:     vm,
-	})
+	for containerIndex := 0; containerIndex < containersLen; containerIndex++ {
+		patch = append(patch, jsonPatchOperation{
+			Operation: "add",
+			Path:      "/spec/containers/" + strconv.Itoa(containerIndex) + "/volumeMounts/-",
+			Value:     vm,
+		})
+	}
 
 	return patch
 }
 
-func createVolPatch(patch []jsonPatchOperation, hugepageResourceList []hugepageResourceData) []jsonPatchOperation {
-	patch = addVolumeMount(patch)
-	patch = addVolDownwardAPI(patch, hugepageResourceList)
+func createVolPatch(patch []jsonPatchOperation, hugepageResourceList []hugepageResourceData, pod *corev1.Pod) []jsonPatchOperation {
+	patch = addVolumeMount(patch, len(pod.Spec.Containers))
+	patch = addVolDownwardAPI(patch, hugepageResourceList, pod)
 	return patch
 }
 
@@ -663,7 +673,7 @@ func createCustomizedPatch(pod corev1.Pod) ([]jsonPatchOperation, error) {
 	return userDefinedPatch, nil
 }
 
-func appendCustomizedPatch(patch []jsonPatchOperation, pod corev1.Pod, userDefinedPatch []jsonPatchOperation) []jsonPatchOperation{
+func appendCustomizedPatch(patch []jsonPatchOperation, pod corev1.Pod, userDefinedPatch []jsonPatchOperation) []jsonPatchOperation {
 	for _, p := range userDefinedPatch {
 		if p.Path == "/metadata/annotations" {
 			patch = appendPodAnnotation(patch, pod, p)
@@ -851,7 +861,7 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 					}
 				}
 			}
-			patch = createVolPatch(patch, hugepageResourceList)
+			patch = createVolPatch(patch, hugepageResourceList, &pod)
 			patch = appendCustomizedPatch(patch, pod, userDefinedPatch)
 		}
 		patch = createNodeSelectorPatch(patch, pod.Spec.NodeSelector, desiredNsMap)
