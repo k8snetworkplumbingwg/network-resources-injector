@@ -24,7 +24,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 
-	arv1beta1 "k8s.io/api/admissionregistration/v1beta1"
+	arv1 "k8s.io/api/admissionregistration/v1"
 	"k8s.io/api/certificates/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -131,38 +131,41 @@ func createMutatingWebhookConfiguration(certificate []byte, failurePolicyStr str
 	configName := strings.Join([]string{prefix, "mutating-config"}, "-")
 	serviceName := strings.Join([]string{prefix, "service"}, "-")
 	removeMutatingWebhookIfExists(configName)
-	var failurePolicy arv1beta1.FailurePolicyType
+	var failurePolicy arv1.FailurePolicyType
 	if strings.EqualFold(strings.TrimSpace(failurePolicyStr), "Ignore") {
-		failurePolicy = arv1beta1.Ignore
+		failurePolicy = arv1.Ignore
 	} else if strings.EqualFold(strings.TrimSpace(failurePolicyStr), "Fail") {
-		failurePolicy = arv1beta1.Fail
+		failurePolicy = arv1.Fail
 	} else {
 		return errors.New("unknown failure policy type")
 	}
+	sideEffects := arv1.SideEffectClassNone
 	path := "/mutate"
-	configuration := &arv1beta1.MutatingWebhookConfiguration{
+	configuration := &arv1.MutatingWebhookConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: configName,
 			Labels: map[string]string{
 				"app": prefix,
 			},
 		},
-		Webhooks: []arv1beta1.MutatingWebhook{
-			arv1beta1.MutatingWebhook{
+		Webhooks: []arv1.MutatingWebhook{
+			arv1.MutatingWebhook{
 				Name: configName + ".k8s.cni.cncf.io",
-				ClientConfig: arv1beta1.WebhookClientConfig{
+				ClientConfig: arv1.WebhookClientConfig{
 					CABundle: certificate,
-					Service: &arv1beta1.ServiceReference{
+					Service: &arv1.ServiceReference{
 						Namespace: namespace,
 						Name:      serviceName,
 						Path:      &path,
 					},
 				},
-				FailurePolicy: &failurePolicy,
-				Rules: []arv1beta1.RuleWithOperations{
-					arv1beta1.RuleWithOperations{
-						Operations: []arv1beta1.OperationType{arv1beta1.Create},
-						Rule: arv1beta1.Rule{
+				FailurePolicy:           &failurePolicy,
+				AdmissionReviewVersions: []string{"v1"},
+				SideEffects:             &sideEffects,
+				Rules: []arv1.RuleWithOperations{
+					arv1.RuleWithOperations{
+						Operations: []arv1.OperationType{arv1.Create},
+						Rule: arv1.Rule{
 							APIGroups:   []string{""},
 							APIVersions: []string{"v1"},
 							Resources:   []string{"pods"},
@@ -172,7 +175,7 @@ func createMutatingWebhookConfiguration(certificate []byte, failurePolicyStr str
 			},
 		},
 	}
-	_, err := clientset.AdmissionregistrationV1beta1().MutatingWebhookConfigurations().Create(context.TODO(), configuration, metav1.CreateOptions{})
+	_, err := clientset.AdmissionregistrationV1().MutatingWebhookConfigurations().Create(context.TODO(), configuration, metav1.CreateOptions{})
 	return err
 }
 
@@ -215,10 +218,10 @@ func removeServiceIfExists(serviceName string) {
 }
 
 func removeMutatingWebhookIfExists(configName string) {
-	config, err := clientset.AdmissionregistrationV1beta1().MutatingWebhookConfigurations().Get(context.TODO(), configName, metav1.GetOptions{})
+	config, err := clientset.AdmissionregistrationV1().MutatingWebhookConfigurations().Get(context.TODO(), configName, metav1.GetOptions{})
 	if config != nil && err == nil {
 		glog.Infof("mutating webhook %s already exists, removing it first", configName)
-		err := clientset.AdmissionregistrationV1beta1().MutatingWebhookConfigurations().Delete(context.TODO(), configName, metav1.DeleteOptions{})
+		err := clientset.AdmissionregistrationV1().MutatingWebhookConfigurations().Delete(context.TODO(), configName, metav1.DeleteOptions{})
 		if err != nil {
 			glog.Errorf("error trying to remove mutating webhook configuration: %s", err)
 		}
