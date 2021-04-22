@@ -31,6 +31,7 @@ import (
 	"github.com/pkg/errors"
 	multus "gopkg.in/intel/multus-cni.v3/pkg/types"
 
+	"github.com/k8snetworkplumbingwg/network-resources-injector/pkg/controlswitches"
 	netcache "github.com/k8snetworkplumbingwg/network-resources-injector/pkg/tools"
 	"github.com/k8snetworkplumbingwg/network-resources-injector/pkg/types"
 	"k8s.io/api/admission/v1beta1"
@@ -68,13 +69,15 @@ const (
 )
 
 var (
-	clientset              kubernetes.Interface
-	injectHugepageDownApi  bool
-	resourceNameKeys       []string
-	honorExistingResources bool
-	userDefinedInjects     = &userDefinedInjections{Patchs: make(map[string]jsonPatchOperation)}
-	nadCache               netcache.NetAttachDefCacheService
+	clientset          kubernetes.Interface
+	nadCache           netcache.NetAttachDefCacheService
+	userDefinedInjects = &userDefinedInjections{Patchs: make(map[string]jsonPatchOperation)}
+	controlSwitches    *controlswitches.ControlSwitches
 )
+
+func SetControlSwitches(activeConfiguration *controlswitches.ControlSwitches) {
+	controlSwitches = activeConfiguration
+}
 
 func prepareAdmissionReviewResponse(allowed bool, message string, ar *v1beta1.AdmissionReview) error {
 	if ar.Request != nil {
@@ -384,7 +387,7 @@ func parseNetworkAttachDefinition(net *multus.NetworkSelectionElement, reqs map[
 	glog.Infof("network attachment definition '%s/%s' found", net.Namespace, net.Name)
 
 	/* network object exists, so check if it contains resourceName annotation */
-	for _, networkResourceNameKey := range resourceNameKeys {
+	for _, networkResourceNameKey := range controlSwitches.GetResourceNameKeys() {
 		if resourceName, exists := annotationsMap[networkResourceNameKey]; exists {
 			/* add resource to map/increment if it was already there */
 			reqs[resourceName]++
@@ -682,6 +685,10 @@ func getResourceList(resourceRequests map[string]int64) *corev1.ResourceList {
 func createCustomizedPatch(pod corev1.Pod) ([]jsonPatchOperation, error) {
 	var userDefinedPatch []jsonPatchOperation
 
+	if !controlSwitches.IsCustomizedInjectionsEnabled() {
+		return userDefinedPatch, nil
+	}
+
 	// lock for reading
 	userDefinedInjects.Lock()
 	defer userDefinedInjects.Unlock()
@@ -694,6 +701,7 @@ func createCustomizedPatch(pod corev1.Pod) ([]jsonPatchOperation, error) {
 			userDefinedPatch = append(userDefinedPatch, v)
 		}
 	}
+
 	return userDefinedPatch, nil
 }
 
@@ -765,7 +773,7 @@ func getNetworkSelections(annotationKey string, pod corev1.Pod, userDefinedPatch
 
 // MutateHandler handles AdmissionReview requests and sends responses back to the K8s API server
 func MutateHandler(w http.ResponseWriter, req *http.Request) {
-	glog.Infof("Received mutation request")
+	glog.Infof("Received mutation request. Features status: %s", controlSwitches.GetAllFeaturesState())
 	var err error
 
 	/* read AdmissionReview from the HTTP request */
@@ -858,8 +866,7 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 		if len(resourceRequests) == 0 {
 			glog.Infof("pod %s/%s doesn't need any custom network resources", pod.ObjectMeta.Namespace, pod.ObjectMeta.Name)
 		} else {
-			glog.Infof("honor-resources=%v", honorExistingResources)
-			if honorExistingResources {
+			if controlSwitches.IsHonorExistingResourcesEnabled() {
 				patch = updateResourcePatch(patch, pod.Spec.Containers, resourceRequests)
 			} else {
 				patch = createResourcePatch(patch, pod.Spec.Containers, resourceRequests)
@@ -868,8 +875,7 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 			// Determine if hugepages are being requested for a given container,
 			// and if so, expose the value to the container via Downward API.
 			var hugepageResourceList []hugepageResourceData
-			glog.Infof("injectHugepageDownApi=%v", injectHugepageDownApi)
-			if injectHugepageDownApi {
+			if controlSwitches.IsHugePagedownAPIEnabled() {
 				for containerIndex, container := range pod.Spec.Containers {
 					found := false
 					if len(container.Resources.Requests) != 0 {
@@ -954,18 +960,6 @@ func SetNetAttachDefCache(cache netcache.NetAttachDefCacheService) {
 	nadCache = cache
 }
 
-// SetResourceNameKeys extracts resources from a string and add them to resourceNameKeys array
-func SetResourceNameKeys(keys string) error {
-	if keys == "" {
-		return errors.New("resoure keys can not be empty")
-	}
-	for _, resourceNameKey := range strings.Split(keys, ",") {
-		resourceNameKey = strings.TrimSpace(resourceNameKey)
-		resourceNameKeys = append(resourceNameKeys, resourceNameKey)
-	}
-	return nil
-}
-
 // SetupInClusterClient setups K8s client to communicate with the API server
 func SetupInClusterClient() kubernetes.Interface {
 	/* setup Kubernetes API client */
@@ -980,19 +974,12 @@ func SetupInClusterClient() kubernetes.Interface {
 	return clientset
 }
 
-// SetInjectHugepageDownApi sets a flag to indicate whether or not to inject the
-// hugepage request and limit for the Downward API.
-func SetInjectHugepageDownApi(hugepageFlag bool) {
-	injectHugepageDownApi = hugepageFlag
-}
-
-// SetHonorExistingResources initialize the honorExistingResources flag
-func SetHonorExistingResources(resourcesHonorFlag bool) {
-	honorExistingResources = resourcesHonorFlag
-}
-
 // SetCustomizedInjections sets additional injections to be applied in Pod spec
 func SetCustomizedInjections(injections *corev1.ConfigMap) {
+	if !controlSwitches.IsCustomizedInjectionsEnabled() {
+		return
+	}
+
 	// lock for writing
 	userDefinedInjects.Lock()
 	defer userDefinedInjects.Unlock()
@@ -1002,10 +989,10 @@ func SetCustomizedInjections(injections *corev1.ConfigMap) {
 
 	for k, v := range injections.Data {
 		existValue, exists := userDefinedPatchs[k]
-		// unmarshall userDefined injection to json patch
+		// unmarshal userDefined injection to json patch
 		err := json.Unmarshal([]byte(v), &patch)
 		if err != nil {
-			glog.Errorf("Failed to unmarshall user-defined injection: %v", v)
+			glog.Errorf("Failed to unmarshal user-defined injection: %v", v)
 			continue
 		}
 		// metadata.Annotations is the only supported field for user definition
@@ -1020,7 +1007,7 @@ func SetCustomizedInjections(injections *corev1.ConfigMap) {
 		}
 	}
 	// remove stale entries from userDefined configMap
-	for k, _ := range userDefinedPatchs {
+	for k := range userDefinedPatchs {
 		if _, ok := injections.Data[k]; ok {
 			continue
 		}

@@ -15,24 +15,32 @@
 package webhook
 
 import (
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
-	. "github.com/onsi/gomega"
-
 	"bytes"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 
+	"gopkg.in/intel/multus-cni.v3/pkg/types"
 	"k8s.io/api/admission/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"gopkg.in/intel/multus-cni.v3/pkg/types"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/gomega"
+
+	"github.com/k8snetworkplumbingwg/network-resources-injector/pkg/controlswitches"
 )
 
-var _ = Describe("Webhook", func() {
+func createBool(value bool) *bool {
+	return &value
+}
 
+func createString(value string) *string {
+	return &value
+}
+
+var _ = Describe("Webhook", func() {
 	Describe("Preparing Admission Review Response", func() {
 		Context("Admission Review Request is nil", func() {
 			It("should return error", func() {
@@ -106,6 +114,12 @@ var _ = Describe("Webhook", func() {
 	})
 
 	Describe("Handling requests", func() {
+		BeforeEach(func() {
+			structure := controlswitches.SetupControlSwitchesUnitTests(createBool(false), createBool(false), createBool(false), createString(""))
+			structure.InitControlSwitches()
+			SetControlSwitches(structure)
+		})
+
 		Context("Request body is empty", func() {
 			It("mutate - should return an error", func() {
 				req := httptest.NewRequest("POST", fmt.Sprintf("https://fakewebhook/mutate"), nil)
@@ -128,74 +142,82 @@ var _ = Describe("Webhook", func() {
 		})
 	})
 
-	DescribeTable("Create user-defined patchs",
+	Describe("Create user-defined patchs", func() {
+		BeforeEach(func() {
+			structure := controlswitches.SetupControlSwitchesUnitTests(createBool(false), createBool(false), createBool(true), createString(""))
+			structure.InitControlSwitches()
+			SetControlSwitches(structure)
+		})
 
-		func(pod corev1.Pod, userDefinedInjectPatchs map[string]jsonPatchOperation, out []jsonPatchOperation) {
-			userDefinedInjects.Patchs = userDefinedInjectPatchs
-			appliedPatchs, _ := createCustomizedPatch(pod)
-			Expect(appliedPatchs).Should(Equal(out))
-		},
-		Entry(
-			"match pod label",
-			corev1.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test",
-					Labels: map[string]string{"nri-inject-annotation": "true"},
-				},
-				Spec: corev1.PodSpec{},
+		DescribeTable("Create user-defined patchs",
+
+			func(pod corev1.Pod, userDefinedInjectPatchs map[string]jsonPatchOperation, out []jsonPatchOperation) {
+				userDefinedInjects.Patchs = userDefinedInjectPatchs
+				appliedPatchs, _ := createCustomizedPatch(pod)
+				Expect(appliedPatchs).Should(Equal(out))
 			},
-			map[string]jsonPatchOperation{
-				"nri-inject-annotation": jsonPatchOperation{
-					Operation: "add",
-					Path: "/metadata/annotations",
-					Value: map[string]interface{}{"k8s.v1.cni.cncf.io/networks": "sriov-net"},
+			Entry(
+				"match pod label",
+				corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "test",
+						Labels: map[string]string{"nri-inject-annotation": "true"},
+					},
+					Spec: corev1.PodSpec{},
 				},
-			},
-			[]jsonPatchOperation{
-				{
-					Operation: "add",
-					Path: "/metadata/annotations",
-					Value: map[string]interface{}{"k8s.v1.cni.cncf.io/networks": "sriov-net"},
+				map[string]jsonPatchOperation{
+					"nri-inject-annotation": jsonPatchOperation{
+						Operation: "add",
+						Path:      "/metadata/annotations",
+						Value:     map[string]interface{}{"k8s.v1.cni.cncf.io/networks": "sriov-net"},
+					},
 				},
-			},
-		),
-		Entry(
-			"doesn't match pod label value",
-			corev1.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test",
-					Labels: map[string]string{"nri-inject-annotation": "false"},
+				[]jsonPatchOperation{
+					{
+						Operation: "add",
+						Path:      "/metadata/annotations",
+						Value:     map[string]interface{}{"k8s.v1.cni.cncf.io/networks": "sriov-net"},
+					},
 				},
-				Spec: corev1.PodSpec{},
-			},
-			map[string]jsonPatchOperation{
-				"nri-inject-annotation": jsonPatchOperation{
-					Operation: "add",
-					Path: "/metadata/annotations",
-					Value: map[string]interface{}{"k8s.v1.cni.cncf.io/networks": "sriov-net"},
+			),
+			Entry(
+				"doesn't match pod label value",
+				corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "test",
+						Labels: map[string]string{"nri-inject-annotation": "false"},
+					},
+					Spec: corev1.PodSpec{},
 				},
-			},
-			nil,
-		),
-		Entry(
-			"doesn't match pod label key",
-			corev1.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test",
-					Labels: map[string]string{"nri-inject-labels": "true"},
+				map[string]jsonPatchOperation{
+					"nri-inject-annotation": jsonPatchOperation{
+						Operation: "add",
+						Path:      "/metadata/annotations",
+						Value:     map[string]interface{}{"k8s.v1.cni.cncf.io/networks": "sriov-net"},
+					},
 				},
-				Spec: corev1.PodSpec{},
-			},
-			map[string]jsonPatchOperation{
-				"nri-inject-annotation": jsonPatchOperation{
-					Operation: "add",
-					Path: "/metadata/annotations",
-					Value: map[string]interface{}{"k8s.v1.cni.cncf.io/networks": "sriov-net"},
+				nil,
+			),
+			Entry(
+				"doesn't match pod label key",
+				corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "test",
+						Labels: map[string]string{"nri-inject-labels": "true"},
+					},
+					Spec: corev1.PodSpec{},
 				},
-			},
-			nil,
-		),
-	)
+				map[string]jsonPatchOperation{
+					"nri-inject-annotation": jsonPatchOperation{
+						Operation: "add",
+						Path:      "/metadata/annotations",
+						Value:     map[string]interface{}{"k8s.v1.cni.cncf.io/networks": "sriov-net"},
+					},
+				},
+				nil,
+			),
+		)
+	})
 
 	DescribeTable("Get network selections",
 
@@ -209,7 +231,7 @@ var _ = Describe("Webhook", func() {
 			"k8s.v1.cni.cncf.io/networks",
 			corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "test",
+					Name:        "test",
 					Annotations: map[string]string{"k8s.v1.cni.cncf.io/networks": "sriov-net"},
 				},
 				Spec: corev1.PodSpec{},
@@ -217,8 +239,8 @@ var _ = Describe("Webhook", func() {
 			[]jsonPatchOperation{
 				{
 					Operation: "add",
-					Path: "/metadata/annotations",
-					Value: map[string]interface{}{"k8s.v1.cni.cncf.io/networks": "sriov-net-user-defined"},
+					Path:      "/metadata/annotations",
+					Value:     map[string]interface{}{"k8s.v1.cni.cncf.io/networks": "sriov-net-user-defined"},
 				},
 			},
 			"sriov-net",
@@ -229,7 +251,7 @@ var _ = Describe("Webhook", func() {
 			"k8s.v1.cni.cncf.io/networks",
 			corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "test",
+					Name:        "test",
 					Annotations: map[string]string{"v1.multus-cni.io/default-network": "sriov-net"},
 				},
 				Spec: corev1.PodSpec{},
@@ -237,8 +259,8 @@ var _ = Describe("Webhook", func() {
 			[]jsonPatchOperation{
 				{
 					Operation: "add",
-					Path: "/metadata/annotations",
-					Value: map[string]interface{}{"k8s.v1.cni.cncf.io/networks": "sriov-net-user-defined"},
+					Path:      "/metadata/annotations",
+					Value:     map[string]interface{}{"k8s.v1.cni.cncf.io/networks": "sriov-net-user-defined"},
 				},
 			},
 			"sriov-net-user-defined",
@@ -249,7 +271,7 @@ var _ = Describe("Webhook", func() {
 			"k8s.v1.cni.cncf.io/networks",
 			corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "test",
+					Name:        "test",
 					Annotations: map[string]string{"v1.multus-cni.io/default-network": "sriov-net"},
 				},
 				Spec: corev1.PodSpec{},
@@ -257,8 +279,8 @@ var _ = Describe("Webhook", func() {
 			[]jsonPatchOperation{
 				{
 					Operation: "add",
-					Path: "/metadata/annotations",
-					Value: map[string]interface{}{"v1.multus-cni.io/default-network": "sriov-net-user-defined"},
+					Path:      "/metadata/annotations",
+					Value:     map[string]interface{}{"v1.multus-cni.io/default-network": "sriov-net-user-defined"},
 				},
 			},
 			"",
@@ -266,96 +288,104 @@ var _ = Describe("Webhook", func() {
 		),
 	)
 
-	DescribeTable("Setting user-defined injections",
+	Describe("Set user-defined injections to true and run table tests", func() {
+		BeforeEach(func() {
+			structure := controlswitches.SetupControlSwitchesUnitTests(createBool(false), createBool(false), createBool(true), createString(""))
+			structure.InitControlSwitches()
+			SetControlSwitches(structure)
+		})
 
-		func(in *corev1.ConfigMap, existing map[string]jsonPatchOperation, out map[string]jsonPatchOperation) {
-			SetCustomizedInjections(in)
-			Expect(userDefinedInjects.Patchs).Should(Equal(out))
-		},
-		Entry(
-			"patch - empty config map",
-			&corev1.ConfigMap{
-				Data: map[string]string{},
+		DescribeTable("Setting user-defined injections",
+
+			func(in *corev1.ConfigMap, existing map[string]jsonPatchOperation, out map[string]jsonPatchOperation) {
+				SetCustomizedInjections(in)
+				Expect(userDefinedInjects.Patchs).Should(Equal(out))
 			},
-			map[string]jsonPatchOperation{},
-			map[string]jsonPatchOperation{},
-		),
-		Entry(
-			"patch - addtional networks annotation",
-			&corev1.ConfigMap{
-				Data: map[string]string{
-					"nri-inject-annotation": "{\"op\": \"add\", \"path\": \"/metadata/annotations\", \"value\": {\"k8s.v1.cni.cncf.io/networks\": \"sriov-net\"}}"},
-			},
-			map[string]jsonPatchOperation{},
-			map[string]jsonPatchOperation{
-				"nri-inject-annotation": jsonPatchOperation{
-					Operation: "add",
-					Path: "/metadata/annotations",
-					Value: map[string]interface{}{"k8s.v1.cni.cncf.io/networks": "sriov-net"},
+			Entry(
+				"patch - empty config map",
+				&corev1.ConfigMap{
+					Data: map[string]string{},
 				},
-			},
-		),
-		Entry(
-			"patch - default network annotation",
-			&corev1.ConfigMap{
-				Data: map[string]string{
-					"nri-inject-annotation": "{\"op\": \"add\", \"path\": \"/metadata/annotations\", \"value\": {\"v1.multus-cni.io/default-network\": \"sriov-net\"}}"},
-			},
-			map[string]jsonPatchOperation{},
-			map[string]jsonPatchOperation{
-				"nri-inject-annotation": jsonPatchOperation{
-					Operation: "add",
-					Path: "/metadata/annotations",
-					Value: map[string]interface{}{"v1.multus-cni.io/default-network": "sriov-net"},
+				map[string]jsonPatchOperation{},
+				map[string]jsonPatchOperation{},
+			),
+			Entry(
+				"patch - addtional networks annotation",
+				&corev1.ConfigMap{
+					Data: map[string]string{
+						"nri-inject-annotation": "{\"op\": \"add\", \"path\": \"/metadata/annotations\", \"value\": {\"k8s.v1.cni.cncf.io/networks\": \"sriov-net\"}}"},
 				},
-			},
-		),
-		Entry(
-			"patch - non-annotation",
-			&corev1.ConfigMap{
-				Data: map[string]string{
-					"nri-inject-labels": "{\"op\": \"add\", \"path\": \"/metadata/labels\", \"value\": {\"v1.multus-cni.io/default-network\": \"sriov-net\"}}",
+				map[string]jsonPatchOperation{},
+				map[string]jsonPatchOperation{
+					"nri-inject-annotation": jsonPatchOperation{
+						Operation: "add",
+						Path:      "/metadata/annotations",
+						Value:     map[string]interface{}{"k8s.v1.cni.cncf.io/networks": "sriov-net"},
+					},
 				},
-			},
-			map[string]jsonPatchOperation{},
-			map[string]jsonPatchOperation{},
-		),
-		Entry(
-			"patch - remove stale entry",
-			&corev1.ConfigMap{
-				Data: map[string]string{},
-			},
-			map[string]jsonPatchOperation{
-				"nri-inject-annotation": jsonPatchOperation{
-					Operation: "add",
-					Path: "/metadata/annotations",
-					Value: map[string]interface{}{"v1.multus-cni.io/default-network": "sriov-net"},
+			),
+			Entry(
+				"patch - default network annotation",
+				&corev1.ConfigMap{
+					Data: map[string]string{
+						"nri-inject-annotation": "{\"op\": \"add\", \"path\": \"/metadata/annotations\", \"value\": {\"v1.multus-cni.io/default-network\": \"sriov-net\"}}"},
 				},
-			},
-			map[string]jsonPatchOperation{},
-		),
-		Entry(
-			"patch - overwrite existing userDefinedInjects",
-			&corev1.ConfigMap{
-				Data: map[string]string{
-					"nri-inject-annotation": "{\"op\": \"add\", \"path\": \"/metadata/annotations\", \"value\": {\"v1.multus-cni.io/default-network\": \"sriov-net-new\"}}"},
-			},
-			map[string]jsonPatchOperation{
-				"nri-inject-annotation": jsonPatchOperation{
-					Operation: "add",
-					Path: "/metadata/annotations",
-					Value: map[string]interface{}{"v1.multus-cni.io/default-network": "sriov-net-old"},
+				map[string]jsonPatchOperation{},
+				map[string]jsonPatchOperation{
+					"nri-inject-annotation": jsonPatchOperation{
+						Operation: "add",
+						Path:      "/metadata/annotations",
+						Value:     map[string]interface{}{"v1.multus-cni.io/default-network": "sriov-net"},
+					},
 				},
-			},
-			map[string]jsonPatchOperation{
-				"nri-inject-annotation": jsonPatchOperation{
-					Operation: "add",
-					Path: "/metadata/annotations",
-					Value: map[string]interface{}{"v1.multus-cni.io/default-network": "sriov-net-new"},
+			),
+			Entry(
+				"patch - non-annotation",
+				&corev1.ConfigMap{
+					Data: map[string]string{
+						"nri-inject-labels": "{\"op\": \"add\", \"path\": \"/metadata/labels\", \"value\": {\"v1.multus-cni.io/default-network\": \"sriov-net\"}}",
+					},
 				},
-			},
-		),
-	)
+				map[string]jsonPatchOperation{},
+				map[string]jsonPatchOperation{},
+			),
+			Entry(
+				"patch - remove stale entry",
+				&corev1.ConfigMap{
+					Data: map[string]string{},
+				},
+				map[string]jsonPatchOperation{
+					"nri-inject-annotation": jsonPatchOperation{
+						Operation: "add",
+						Path:      "/metadata/annotations",
+						Value:     map[string]interface{}{"v1.multus-cni.io/default-network": "sriov-net"},
+					},
+				},
+				map[string]jsonPatchOperation{},
+			),
+			Entry(
+				"patch - overwrite existing userDefinedInjects",
+				&corev1.ConfigMap{
+					Data: map[string]string{
+						"nri-inject-annotation": "{\"op\": \"add\", \"path\": \"/metadata/annotations\", \"value\": {\"v1.multus-cni.io/default-network\": \"sriov-net-new\"}}"},
+				},
+				map[string]jsonPatchOperation{
+					"nri-inject-annotation": jsonPatchOperation{
+						Operation: "add",
+						Path:      "/metadata/annotations",
+						Value:     map[string]interface{}{"v1.multus-cni.io/default-network": "sriov-net-old"},
+					},
+				},
+				map[string]jsonPatchOperation{
+					"nri-inject-annotation": jsonPatchOperation{
+						Operation: "add",
+						Path:      "/metadata/annotations",
+						Value:     map[string]interface{}{"v1.multus-cni.io/default-network": "sriov-net-new"},
+					},
+				},
+			),
+		)
+	})
 
 	var emptyList []*types.NetworkSelectionElement
 	DescribeTable("Network selection elements parsing",
