@@ -1,3 +1,19 @@
+* [Network Resources Injector](#network-resources-injector)
+   * [Getting started](#getting-started)
+   * [Network resources injection example](#network-resources-injection-example)
+   * [Vendoring](#vendoring)
+   * [Security](#security)
+      * [Disable adding client CAs to server TLS endpoint](#disable-adding-client-cas-to-server-tls-endpoint)
+      * [Client CAs](#client-cas)
+   * [Additional features](#additional-features)
+      * [Expose Hugepages via Downward API](#expose-hugepages-via-downward-api)
+      * [Node Selector](#node-selector)
+      * [User Defined Injections](#user-defined-injections)
+   * [Test](#test)
+      * [Unit tests](#unit-tests)
+      * [E2E tests using Kubernetes in Docker (KinD)](#e2e-tests-using-kubernetes-in-docker-kind)
+   * [Contact Us](#contact-us)
+
 # Network Resources Injector
 
 [![Weekly minutes](https://img.shields.io/badge/Weekly%20Meeting%20Minutes-Mon%203pm%20GMT-blue.svg?style=plastic)](https://docs.google.com/document/d/1sJQMHbxZdeYJPgAWK1aSt6yzZ4K_8es7woVIrwinVwI)
@@ -211,7 +227,7 @@ metadata:
   name: nri-user-defined-injections
   namespace: kube-system
 data:
-  feature.pod.kubernetes.io/sriov-network: '{"op": "add", "path": "/metadata/annotations", "value": {"k8s.v1.cni.cncf.io/networks": "sriov-net-attach-def"}}'
+  feature.pod.kubernetes.io_sriov-network: '{"op": "add", "path": "/metadata/annotations", "value": {"k8s.v1.cni.cncf.io/networks": "sriov-net-attach-def"}}'
 ```
 
 `feature.pod.kubernetes.io/sriov-network` is a user defined label to request additional networks. Every pod that contains this label with a value set to `"true"` will be applied with the patch that's defined in the following json string.
@@ -224,6 +240,8 @@ data:
 
 `"value": {"k8s.v1.cni.cncf.io/networks": "sriov-net-attach-def"}}` is the value to be updated in the given `path`.
 
+> NOTE: Please be aware that current implementation supports only **add** type of JSON operation. Other types like _remove, replace, copy, move_ are not yet supported.
+
 For a pod to request user defined injection, one of its labels shall match with the labels defined in user defined injection ConfigMap.
 For example, with the below pod manifest:
 
@@ -233,7 +251,7 @@ kind: Pod
 metadata:
   name: testpod
   labels:
-   feature.pod.kubernetes.io/sriov-network: "true"
+   feature.pod.kubernetes.io_sriov-network: "true"
 spec:
   containers:
   - name: app
@@ -250,7 +268,7 @@ kind: Pod
 metadata:
   name: testpod
   labels:
-   feature.pod.kubernetes.io/sriov-network: "true"
+   feature.pod.kubernetes.io_sriov-network: "true"
   annotations:
     k8s.v1.cni.cncf.io/networks: sriov-net-attach-def
 spec:
@@ -260,6 +278,10 @@ spec:
     command: [ "/bin/bash", "-c", "--" ]
     args: [ "while true; do sleep 300000; done;" ]
 ```
+
+> NOTE: It it worth to mention that every existing network defined in annotations.k8s.v1.cni.cncf.io/networks is going to be replaced by NRI with new value.
+
+> NOTE: NRI is only able to inject one custom definition. When user will define more key/values pairs within ConfigMap (nri-user-defined-injections), only one will be injected.
 
 ## Test
 ### Unit tests
