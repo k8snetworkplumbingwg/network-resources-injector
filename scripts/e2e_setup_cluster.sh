@@ -10,17 +10,16 @@ set -eo pipefail
 here="$(dirname "$(readlink --canonicalize "${BASH_SOURCE[0]}")")"
 root="$(readlink --canonicalize "$here/..")"
 RETRY_MAX=10
-INTERVAL=10
+INTERVAL=30
 TIMEOUT=300
 APP_NAME="network-resources-injector"
 APP_DOCKER_TAG="${APP_NAME}:latest"
 K8_ADDITIONS_PATH="${root}/scripts/control-plane-additions"
-TMP_DIR="${root}/test/tmp"
+TMP_DIR="/tmp"
 MULTUS_DAEMONSET_URL="https://raw.githubusercontent.com/intel/multus-cni/master/images/multus-daemonset.yml"
 MULTUS_NAME="multus"
 CNIS_DAEMONSET_URL="https://raw.githubusercontent.com/intel/multus-cni/master/e2e/cni-install.yml"
 CNIS_NAME="cni-plugins"
-TEST_NAMESPACE="default"
 
 # create cluster CA and API server admission configuration
 # to force API server and NRI authentication.
@@ -55,6 +54,8 @@ create_cluster() {
   cat <<EOF | kind create cluster --config=-
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
+featureGates:
+  DownwardAPIHugePages: true
 kubeadmConfigPatches:
 - |
   kind: ClusterConfiguration
@@ -100,25 +101,6 @@ check_requirements() {
   done
 }
 
-create_foo_network() {
-cat <<EOF | kubectl apply -f -
-apiVersion: k8s.cni.cncf.io/v1
-kind: NetworkAttachmentDefinition
-metadata:
-  annotations:
-    k8s.v1.cni.cncf.io/resourceName: example.com/foo
-  name: foo-network
-  namespace: ${TEST_NAMESPACE}
-spec:
-  config: |
-    {
-      "cniVersion": "0.3.0",
-      "name": "foo-network",
-      "type": "loopback"
-    }
-EOF
-}
-
 echo "## checking requirements"
 check_requirements
 # generate K8 API server CA key/cert and supporting files for mTLS with NRI
@@ -142,10 +124,8 @@ retry kubectl create -f "${CNIS_DAEMONSET_URL}"
 retry kubectl -n kube-system wait --for=condition=ready -l name="${CNIS_NAME}" pod --timeout=300s
 echo "## install NRI"
 retry kubectl create -f "${root}/deployments/auth.yaml"
-retry kubectl create -f "${root}/deployments/server.yaml"
+retry kubectl create -f "${root}/deployments/server_huge.yaml"
 retry kubectl -n kube-system wait --for=condition=ready -l app="${APP_NAME}" pod --timeout=300s
-echo "## create network foo"
-create_foo_network
 sleep 5
 echo "## starting kube proxy"
 nohup kubectl proxy -p=8001 > /dev/null 2>&1 &
