@@ -22,6 +22,9 @@ image :
 test :
 	scripts/test.sh
 
+lint :
+	scripts/lint.sh
+
 vendor :
 	go mod tidy && go mod vendor
 
