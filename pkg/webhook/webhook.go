@@ -154,6 +154,13 @@ func deserializePod(ar *v1beta1.AdmissionReview) (corev1.Pod, error) {
 	if pod.ObjectMeta.Namespace != "" {
 		return pod, err
 	}
+
+	// AdmissionRequest contains an optional Namespace field
+	if ar.Request.Namespace != "" {
+		pod.ObjectMeta.Namespace = ar.Request.Namespace
+		return pod, nil
+	}
+
 	ownerRef := pod.ObjectMeta.OwnerReferences
 	if ownerRef != nil && len(ownerRef) > 0 {
 		namespace, err := getNamespaceFromOwnerReference(pod.ObjectMeta.OwnerReferences[0])
@@ -162,6 +169,10 @@ func deserializePod(ar *v1beta1.AdmissionReview) (corev1.Pod, error) {
 		}
 		pod.ObjectMeta.Namespace = namespace
 	}
+
+	// pod.ObjectMeta.Namespace may still be empty at this point,
+	// but there is a chance that net-attach-def annotation contains
+	// a valid namespace
 	return pod, err
 }
 
@@ -270,7 +281,18 @@ func parsePodNetworkSelections(podNetworks, defaultNamespace string) ([]*multus.
 	/* fill missing namespaces with default value */
 	for _, networkSelection := range networkSelections {
 		if networkSelection.Namespace == "" {
-			networkSelection.Namespace = defaultNamespace
+			if defaultNamespace == "" {
+				// Ignore the AdmissionReview request when the following conditions are met:
+				// 1) net-attach-def annotation doesn't contain a valid namespace
+				// 2) defaultNamespace retrieved from admission request is empty
+				// Pod admission would fail in subsquent call "getNetworkAttachmentDefinition"
+				// if no namespace is specified. We don't want to fail the pod creation
+				// in such case since it is possible that pod is not a SR-IOV pod
+				glog.Warningf("The admission request doesn't contain a valid namespace, ignoring...")
+				return nil, nil
+			} else {
+				networkSelection.Namespace = defaultNamespace
+			}
 		}
 	}
 
@@ -739,6 +761,7 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 		handleValidationError(w, ar, err)
 		return
 	}
+	glog.Infof("AdmissionReview request received for pod: %s in namespace: %s", pod.ObjectMeta.Name, pod.ObjectMeta.Namespace)
 
 	userDefinedPatch, err := createCustomizedPatch(pod)
 	if err != nil {
