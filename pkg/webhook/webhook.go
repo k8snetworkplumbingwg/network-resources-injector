@@ -761,11 +761,12 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 		handleValidationError(w, ar, err)
 		return
 	}
-	glog.Infof("AdmissionReview request received for pod: %s in namespace: %s", pod.ObjectMeta.Name, pod.ObjectMeta.Namespace)
+	glog.Infof("AdmissionReview request received for pod %s/%s", pod.ObjectMeta.Namespace, pod.ObjectMeta.Name)
 
 	userDefinedPatch, err := createCustomizedPatch(pod)
 	if err != nil {
-		glog.Warningf("Error, failed to create user-defined injection patch, %v", err)
+		glog.Warningf("failed to create user-defined injection patch for pod %s/%s, err: %v",
+			pod.ObjectMeta.Namespace, pod.ObjectMeta.Name, err)
 	}
 
 	defaultNetSelection, defExist := getNetworkSelections(defaultNetworkAnnotationKey, pod, userDefinedPatch)
@@ -789,7 +790,8 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 				if err != nil {
 					err = prepareAdmissionReviewResponse(false, err.Error(), ar)
 					if err != nil {
-						glog.Errorf("error preparing AdmissionReview response: %s", err)
+						glog.Errorf("error preparing AdmissionReview response for pod %s/%s, error: %v",
+							pod.ObjectMeta.Namespace, pod.ObjectMeta.Name, err)
 						http.Error(w, err.Error(), http.StatusBadRequest)
 						return
 					}
@@ -810,7 +812,8 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 				if err != nil {
 					err = prepareAdmissionReviewResponse(false, err.Error(), ar)
 					if err != nil {
-						glog.Errorf("error preparing AdmissionReview response: %s", err)
+						glog.Errorf("error preparing AdmissionReview response for pod %s/%s, error: %v",
+							pod.ObjectMeta.Namespace, pod.ObjectMeta.Name, err)
 						http.Error(w, err.Error(), http.StatusBadRequest)
 						return
 					}
@@ -818,18 +821,21 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 					return
 				}
 			}
+			glog.Infof("pod %s/%s has resource requests: %v and node selectors: %v", pod.ObjectMeta.Namespace,
+				pod.ObjectMeta.Name, resourceRequests, desiredNsMap)
 		}
 
 		/* patch with custom resources requests and limits */
 		err = prepareAdmissionReviewResponse(true, "allowed", ar)
 		if err != nil {
-			glog.Errorf("error preparing AdmissionReview response: %s", err)
+			glog.Errorf("error preparing AdmissionReview response for pod %s/%s, error: %v",
+				pod.ObjectMeta.Namespace, pod.ObjectMeta.Name, err)
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		var patch []jsonPatchOperation
 		if len(resourceRequests) == 0 {
-			glog.Infof("pod doesn't need any custom network resources")
+			glog.Infof("pod %s/%s doesn't need any custom network resources", pod.ObjectMeta.Namespace, pod.ObjectMeta.Name)
 		} else {
 			glog.Infof("honor-resources=%v", honorExistingResources)
 			if honorExistingResources {
@@ -899,7 +905,7 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 			patch = appendCustomizedPatch(patch, pod, userDefinedPatch)
 		}
 		patch = createNodeSelectorPatch(patch, pod.Spec.NodeSelector, desiredNsMap)
-		glog.Infof("patch after all mutations: %v", patch)
+		glog.Infof("patch after all mutations: %v for pod %s/%s", patch, pod.ObjectMeta.Namespace, pod.ObjectMeta.Name)
 
 		patchBytes, _ := json.Marshal(patch)
 		ar.Response.Patch = patchBytes
@@ -909,18 +915,17 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 		}()
 	} else {
 		/* network annotation not provided or empty */
-		glog.Infof("pod spec doesn't have network annotations. Skipping...")
+		glog.Infof("pod %s/%s spec doesn't have network annotations. Skipping...", pod.ObjectMeta.Namespace, pod.ObjectMeta.Name)
 		err = prepareAdmissionReviewResponse(true, "Pod spec doesn't have network annotations. Skipping...", ar)
 		if err != nil {
-			glog.Infof("error preparing AdmissionReview response: %s", err)
+			glog.Errorf("error preparing AdmissionReview response for pod %s/%s, error: %v",
+				pod.ObjectMeta.Namespace, pod.ObjectMeta.Name, err)
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 	}
 
 	writeResponse(w, ar)
-	return
-
 }
 
 // SetResourceNameKeys extracts resources from a string and add them to resourceNameKeys array
