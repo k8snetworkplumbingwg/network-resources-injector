@@ -127,11 +127,18 @@ func writeToFile(certificate, key []byte, certFilename, keyFilename string) erro
 	return nil
 }
 
-func createMutatingWebhookConfiguration(certificate []byte) error {
+func createMutatingWebhookConfiguration(certificate []byte, failurePolicyStr string) error {
 	configName := strings.Join([]string{prefix, "mutating-config"}, "-")
 	serviceName := strings.Join([]string{prefix, "service"}, "-")
 	removeMutatingWebhookIfExists(configName)
-	failurePolicy := arv1beta1.Ignore
+	var failurePolicy arv1beta1.FailurePolicyType
+	if failurePolicyStr == "Ignore" {
+		failurePolicy = arv1beta1.Ignore
+	} else if failurePolicyStr == "Fail" {
+		failurePolicy = arv1beta1.Fail
+	} else {
+		return errors.New("unknown failure policy type")
+	}
 	path := "/mutate"
 	configuration := &arv1beta1.MutatingWebhookConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
@@ -232,7 +239,7 @@ func removeSecretIfExists(secretName string) {
 }
 
 // Install creates resources required by mutating admission webhook
-func Install(k8sNamespace, namePrefix string) {
+func Install(k8sNamespace, namePrefix, failurePolicy string) {
 	/* setup Kubernetes API client */
 	config, err := rest.InClusterConfig()
 	if err != nil {
@@ -267,7 +274,7 @@ func Install(k8sNamespace, namePrefix string) {
 	glog.Infof("certificate and key written to files")
 
 	/* create webhook configurations */
-	err = createMutatingWebhookConfiguration(certificate)
+	err = createMutatingWebhookConfiguration(certificate, failurePolicy)
 	if err != nil {
 		glog.Fatalf("error creating mutating webhook configuration: %s", err)
 	}

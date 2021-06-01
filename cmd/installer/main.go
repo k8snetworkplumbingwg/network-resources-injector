@@ -16,6 +16,7 @@ package main
 
 import (
 	"flag"
+
 	"github.com/golang/glog"
 	"github.com/k8snetworkplumbingwg/network-resources-injector/pkg/installer"
 )
@@ -23,8 +24,9 @@ import (
 func main() {
 	namespace := flag.String("namespace", "kube-system", "Namespace in which all Kubernetes resources will be created.")
 	prefix := flag.String("name", "network-resources-injector", "Prefix added to the names of all created resources.")
+	failurePolicy := flag.String("failure-policy", "Ignore", "failure policy to handle unrecognized errors and timeout errors")
 	flag.Parse()
 
 	glog.Info("starting webhook installation")
-	installer.Install(*namespace, *prefix)
+	installer.Install(*namespace, *prefix, *failurePolicy)
 }
