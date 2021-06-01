@@ -672,22 +672,6 @@ func getResourceList(resourceRequests map[string]int64) *corev1.ResourceList {
 	return &resourceList
 }
 
-func appendPodAnnotation(patch []jsonPatchOperation, pod corev1.Pod, userDefinedPatch jsonPatchOperation) []jsonPatchOperation {
-	annotMap := make(map[string]string)
-	for k, v := range pod.ObjectMeta.Annotations {
-		annotMap[k] = v
-	}
-	for k, v := range userDefinedPatch.Value.(map[string]interface{}) {
-		annotMap[k] = v.(string)
-	}
-	patch = append(patch, jsonPatchOperation{
-		Operation: "add",
-		Path:      "/metadata/annotations",
-		Value:     annotMap,
-	})
-	return patch
-}
-
 func createCustomizedPatch(pod corev1.Pod) ([]jsonPatchOperation, error) {
 	var userDefinedPatch []jsonPatchOperation
 
@@ -706,13 +690,43 @@ func createCustomizedPatch(pod corev1.Pod) ([]jsonPatchOperation, error) {
 	return userDefinedPatch, nil
 }
 
-func appendCustomizedPatch(patch []jsonPatchOperation, pod corev1.Pod, userDefinedPatch []jsonPatchOperation) []jsonPatchOperation {
+func appendAddAnnotPatch(patch []jsonPatchOperation, pod corev1.Pod, userDefinedPatch []jsonPatchOperation) []jsonPatchOperation {
+	annotations := make(map[string]string)
+	patchOp := jsonPatchOperation{
+		Operation: "add",
+		Path:      "/metadata/annotations",
+		Value:     annotations,
+	}
+
 	for _, p := range userDefinedPatch {
-		if p.Path == "/metadata/annotations" {
-			patch = appendPodAnnotation(patch, pod, p)
+		if p.Path == "/metadata/annotations" && p.Operation == "add" {
+			//loop over user defined injected annotations key-value pairs
+			for k, v := range p.Value.(map[string]interface{}) {
+				if _, exists := annotations[k]; exists {
+					glog.Warningf("ignoring duplicate user defined injected annotation: %s: %s", k, v.(string))
+				} else {
+					annotations[k] = v.(string)
+				}
+			}
 		}
 	}
+
+	if len(annotations) > 0 {
+		// attempt to add existing pod annotation but do not override
+		for k, v := range pod.ObjectMeta.Annotations {
+			if _, exists := annotations[k]; !exists {
+				annotations[k] = v
+			}
+		}
+		patch = append(patch, patchOp)
+	}
+
 	return patch
+}
+
+func appendCustomizedPatch(patch []jsonPatchOperation, pod corev1.Pod, userDefinedPatch []jsonPatchOperation) []jsonPatchOperation {
+	//Add operation for annotations is currently only supported
+	return appendAddAnnotPatch(patch, pod, userDefinedPatch)
 }
 
 func getNetworkSelections(annotationKey string, pod corev1.Pod, userDefinedPatch []jsonPatchOperation) (string, bool) {
