@@ -103,7 +103,12 @@ issues:
         - gomnd
         - gosec
         - dupl
-
+    - text: "Magic number: 2"
+      linters:
+        - gomnd
+    - text: "Magic number: 1024"
+      linters:
+        - gomnd
 run:
   skip-dirs:
     - .github/

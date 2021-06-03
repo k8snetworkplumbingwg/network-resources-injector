@@ -83,7 +83,7 @@ func NewTLSKeypairReloader(certPath, keyPath string) (*tlsKeypairReloader, error
 	return result, nil
 }
 
-//NewClientCertPool will load a single client CA
+// NewClientCertPool will load a single client CA
 func NewClientCertPool(clientCaPaths *ClientCAFlags, insecure bool) (*clientCertPool, error) {
 	pool := &clientCertPool{
 		certPaths: clientCaPaths,
@@ -97,7 +97,7 @@ func NewClientCertPool(clientCaPaths *ClientCAFlags, insecure bool) (*clientCert
 	return pool, nil
 }
 
-//Load a certificate into the client CA pool
+// Load a certificate into the client CA pool
 func (pool *clientCertPool) Load() error {
 	if pool.insecure {
 		glog.Infof("can not load client CA pool. Remove --insecure flag to enable.")
@@ -123,7 +123,7 @@ func (pool *clientCertPool) Load() error {
 	return nil
 }
 
-//GetCertPool returns a client CA pool
+// GetCertPool returns a client CA pool
 func (pool *clientCertPool) GetCertPool() *x509.CertPool {
 	if pool.insecure {
 		return nil
@@ -131,7 +131,7 @@ func (pool *clientCertPool) GetCertPool() *x509.CertPool {
 	return pool.certPool
 }
 
-//GetClientAuth determines the policy the http server will follow for TLS Client Authentication
+// GetClientAuth determines the policy the http server will follow for TLS Client Authentication
 func GetClientAuth(insecure bool) tls.ClientAuthType {
 	if insecure {
 		return tls.NoClientCert

@@ -57,42 +57,42 @@ func generateCSR() ([]byte, []byte, error) {
 
 func getSignedCertificate(request []byte) ([]byte, error) {
 	csrName := strings.Join([]string{prefix, "csr"}, "-")
-	csr, err := clientset.CertificatesV1beta1().CertificateSigningRequests().Get(context.TODO(), csrName, metav1.GetOptions{})
-	if csr != nil || err == nil {
+	certSigReq, err := clientset.CertificatesV1beta1().CertificateSigningRequests().Get(context.TODO(), csrName, metav1.GetOptions{})
+	if certSigReq != nil || err == nil {
 		glog.Infof("CSR %s already exists, removing it first", csrName)
 		_ = clientset.CertificatesV1beta1().CertificateSigningRequests().Delete(context.TODO(), csrName, metav1.DeleteOptions{})
 	}
 
 	glog.Infof("creating new CSR %s", csrName)
 	/* build Kubernetes CSR object */
-	csr = &v1beta1.CertificateSigningRequest{}
-	csr.ObjectMeta.Name = csrName
-	csr.ObjectMeta.Namespace = namespace
-	csr.Spec.Request = request
-	csr.Spec.Groups = []string{"system:authenticated"}
-	csr.Spec.Usages = []v1beta1.KeyUsage{v1beta1.UsageDigitalSignature, v1beta1.UsageServerAuth, v1beta1.UsageKeyEncipherment}
+	certSigReq = &v1beta1.CertificateSigningRequest{}
+	certSigReq.ObjectMeta.Name = csrName
+	certSigReq.ObjectMeta.Namespace = namespace
+	certSigReq.Spec.Request = request
+	certSigReq.Spec.Groups = []string{"system:authenticated"}
+	certSigReq.Spec.Usages = []v1beta1.KeyUsage{v1beta1.UsageDigitalSignature, v1beta1.UsageServerAuth, v1beta1.UsageKeyEncipherment}
 
 	/* push CSR to Kubernetes API server */
-	csr, err = clientset.CertificatesV1beta1().CertificateSigningRequests().Create(context.TODO(), csr, metav1.CreateOptions{})
+	certSigReq, err = clientset.CertificatesV1beta1().CertificateSigningRequests().Create(context.TODO(), certSigReq, metav1.CreateOptions{})
 	if err != nil {
 		return nil, errors.Wrap(err, "error creating CSR in Kubernetes API: %s")
 	}
 	glog.Infof("CSR pushed to the Kubernetes API")
 
-	if csr.Status.Certificate != nil {
+	if certSigReq.Status.Certificate != nil {
 		glog.Infof("using already issued certificate for CSR %s", csrName)
-		return csr.Status.Certificate, nil
+		return certSigReq.Status.Certificate, nil
 	}
 	/* approve certificate in K8s API */
-	csr.ObjectMeta.Name = csrName
-	csr.ObjectMeta.Namespace = namespace
-	csr.Status.Conditions = append(csr.Status.Conditions, v1beta1.CertificateSigningRequestCondition{
+	certSigReq.ObjectMeta.Name = csrName
+	certSigReq.ObjectMeta.Namespace = namespace
+	certSigReq.Status.Conditions = append(certSigReq.Status.Conditions, v1beta1.CertificateSigningRequestCondition{
 		Type:           v1beta1.CertificateApproved,
 		Reason:         "Approved by net-attach-def admission controller installer",
 		Message:        "This CSR was approved by net-attach-def admission controller installer.",
 		LastUpdateTime: metav1.Now(),
 	})
-	_, err = clientset.CertificatesV1beta1().CertificateSigningRequests().UpdateApproval(context.TODO(), csr, metav1.UpdateOptions{})
+	_, err = clientset.CertificatesV1beta1().CertificateSigningRequests().UpdateApproval(context.TODO(), certSigReq, metav1.UpdateOptions{})
 	glog.Infof("certificate approval sent")
 	if err != nil {
 		return nil, errors.Wrap(err, "error approving CSR in Kubernetes API")
@@ -105,19 +105,20 @@ func getSignedCertificate(request []byte) ([]byte, error) {
 	defer ticker.Stop()
 
 	for range ticker.C {
-		csr, err = clientset.CertificatesV1beta1().CertificateSigningRequests().Get(context.TODO(), csrName, metav1.GetOptions{})
+		certSigReq, err = clientset.CertificatesV1beta1().CertificateSigningRequests().Get(context.TODO(), csrName, metav1.GetOptions{})
 		if err != nil {
-			return nil, errors.Wrap(err, "error getting signed ceritificate from the API server")
+			return nil, errors.Wrap(err, "error getting signed certificate from the API server")
 		}
-		if csr.Status.Certificate != nil {
-			return csr.Status.Certificate, nil
+		if certSigReq.Status.Certificate != nil {
+			return certSigReq.Status.Certificate, nil
 		}
 		if time.Since(start) > 60*time.Second {
 			break
 		}
 	}
 
-	return nil, errors.New("error getting certificate from the API server: request timed out - verify that Kubernetes certificate signer is setup, more at https://kubernetes.io/docs/tasks/tls/managing-tls-in-a-cluster/#a-note-to-cluster-administrators")
+	return nil, errors.New("error getting certificate from the API server: request timed out - verify that " +
+		"Kubernetes certificate signer is setup")
 }
 
 func writeToFile(certificate, key []byte, certFilename, keyFilename string) error {
@@ -144,7 +145,7 @@ func createMutatingWebhookConfiguration(certificate []byte) error {
 			},
 		},
 		Webhooks: []arv1beta1.MutatingWebhook{
-			arv1beta1.MutatingWebhook{
+			{
 				Name: configName + ".k8s.cni.cncf.io",
 				ClientConfig: arv1beta1.WebhookClientConfig{
 					CABundle: certificate,
@@ -156,7 +157,7 @@ func createMutatingWebhookConfiguration(certificate []byte) error {
 				},
 				FailurePolicy: &failurePolicy,
 				Rules: []arv1beta1.RuleWithOperations{
-					arv1beta1.RuleWithOperations{
+					{
 						Operations: []arv1beta1.OperationType{arv1beta1.Create},
 						Rule: arv1beta1.Rule{
 							APIGroups:   []string{""},
@@ -168,7 +169,8 @@ func createMutatingWebhookConfiguration(certificate []byte) error {
 			},
 		},
 	}
-	_, err := clientset.AdmissionregistrationV1beta1().MutatingWebhookConfigurations().Create(context.TODO(), configuration, metav1.CreateOptions{})
+	_, err := clientset.AdmissionregistrationV1beta1().MutatingWebhookConfigurations().Create(context.TODO(), configuration,
+		metav1.CreateOptions{})
 	return err
 }
 
@@ -211,10 +213,12 @@ func removeServiceIfExists(serviceName string) {
 }
 
 func removeMutatingWebhookIfExists(configName string) {
-	config, err := clientset.AdmissionregistrationV1beta1().MutatingWebhookConfigurations().Get(context.TODO(), configName, metav1.GetOptions{})
+	config, err := clientset.AdmissionregistrationV1beta1().MutatingWebhookConfigurations().Get(context.TODO(), configName,
+		metav1.GetOptions{})
 	if config != nil && err == nil {
 		glog.Infof("mutating webhook %s already exists, removing it first", configName)
-		err := clientset.AdmissionregistrationV1beta1().MutatingWebhookConfigurations().Delete(context.TODO(), configName, metav1.DeleteOptions{})
+		err := clientset.AdmissionregistrationV1beta1().MutatingWebhookConfigurations().Delete(context.TODO(), configName,
+			metav1.DeleteOptions{})
 		if err != nil {
 			glog.Errorf("error trying to remove mutating webhook configuration: %s", err)
 		}
@@ -238,14 +242,14 @@ func Install(k8sNamespace, namePrefix string) {
 	prefix = namePrefix
 
 	/* generate CSR and private key */
-	csr, key, err := generateCSR()
+	certSigReq, key, err := generateCSR()
 	if err != nil {
 		glog.Fatalf("error generating CSR and private key: %s", err)
 	}
 	glog.Infof("raw CSR and private key successfully created")
 
 	/* obtain signed certificate */
-	certificate, err := getSignedCertificate(csr)
+	certificate, err := getSignedCertificate(certSigReq)
 	if err != nil {
 		glog.Fatalf("error getting signed certificate: %s", err)
 	}

@@ -22,7 +22,7 @@ var _ = Describe("Network injection testing", func() {
 		})
 
 		AfterEach(func() {
-			util.DeletePod(cs.CoreV1Interface, pod, timeout)
+			_ = util.DeletePod(cs.CoreV1Interface, pod, timeout)
 		})
 
 		It("should have one limit injected", func() {
@@ -45,7 +45,7 @@ var _ = Describe("Network injection testing", func() {
 		})
 
 		AfterEach(func() {
-			util.DeletePod(cs.CoreV1Interface, pod, timeout)
+			_ = util.DeletePod(cs.CoreV1Interface, pod, timeout)
 		})
 
 		It("should have two limits injected", func() {
