@@ -7,7 +7,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-var _ = Describe("Network injection testing", func(){
+var _ = Describe("Network injection testing", func() {
 	var pod *corev1.Pod
 	var err error
 
@@ -22,7 +22,7 @@ var _ = Describe("Network injection testing", func(){
 		})
 
 		AfterEach(func() {
-			util.DeletePod(cs.CoreV1Interface, pod, timeout)
+			_ = util.DeletePod(cs.CoreV1Interface, pod, timeout)
 		})
 
 		It("should have one limit injected", func() {
@@ -45,7 +45,7 @@ var _ = Describe("Network injection testing", func(){
 		})
 
 		AfterEach(func() {
-			util.DeletePod(cs.CoreV1Interface, pod, timeout)
+			_ = util.DeletePod(cs.CoreV1Interface, pod, timeout)
 		})
 
 		It("should have two limits injected", func() {

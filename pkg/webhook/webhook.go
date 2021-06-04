@@ -9,7 +9,7 @@
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
+// See the License for specific language governing permissions and
 // limitations under the License.
 
 package webhook
@@ -64,11 +64,13 @@ const (
 	networksAnnotationKey       = "k8s.v1.cni.cncf.io/networks"
 	nodeSelectorKey             = "k8s.v1.cni.cncf.io/nodeSelector"
 	defaultNetworkAnnotationKey = "v1.multus-cni.io/default-network"
+	annotPath                   = "/metadata/annotations"
+	oneMb                       = 1 << 20
 )
 
 var (
 	clientset              kubernetes.Interface
-	injectHugepageDownApi  bool
+	injectHugepageDownAPI  bool
 	resourceNameKeys       []string
 	honorExistingResources bool
 	userDefinedInjects     = &userDefinedInjections{Patchs: make(map[string]jsonPatchOperation)}
@@ -94,14 +96,14 @@ func readAdmissionReview(req *http.Request, w http.ResponseWriter) (*v1beta1.Adm
 	var body []byte
 
 	if req.Body != nil {
-		req.Body = http.MaxBytesReader(w, req.Body, 1<<20)
+		req.Body = http.MaxBytesReader(w, req.Body, oneMb)
 		if data, err := ioutil.ReadAll(req.Body); err == nil {
 			body = data
 		}
 	}
 
 	if len(body) == 0 {
-		err := errors.New("Error reading HTTP request: empty body")
+		err := errors.New("error reading HTTP request: empty body")
 		glog.Errorf("%s", err)
 		return nil, http.StatusBadRequest, err
 	}
@@ -109,7 +111,7 @@ func readAdmissionReview(req *http.Request, w http.ResponseWriter) (*v1beta1.Adm
 	/* validate HTTP request headers */
 	contentType := req.Header.Get("Content-Type")
 	if contentType != "application/json" {
-		err := errors.Errorf("Invalid Content-Type='%s', expected 'application/json'", contentType)
+		err := errors.Errorf("invalid Content-Type='%s', expected 'application/json'", contentType)
 		glog.Errorf("%v", err)
 		return nil, http.StatusUnsupportedMediaType, err
 	}
@@ -147,10 +149,10 @@ func deserializeNetworkAttachmentDefinition(ar *v1beta1.AdmissionReview) (cniv1.
 	return netAttachDef, err
 }
 
-func deserializePod(ar *v1beta1.AdmissionReview) (corev1.Pod, error) {
+func deserializePod(ar *v1beta1.AdmissionReview) (*corev1.Pod, error) {
 	/* unmarshal Pod from AdmissionReview request */
-	pod := corev1.Pod{}
-	err := json.Unmarshal(ar.Request.Object.Raw, &pod)
+	pod := &corev1.Pod{}
+	err := json.Unmarshal(ar.Request.Object.Raw, pod)
 	if pod.ObjectMeta.Namespace != "" {
 		return pod, err
 	}
@@ -162,8 +164,8 @@ func deserializePod(ar *v1beta1.AdmissionReview) (corev1.Pod, error) {
 	}
 
 	ownerRef := pod.ObjectMeta.OwnerReferences
-	if ownerRef != nil && len(ownerRef) > 0 {
-		namespace, err := getNamespaceFromOwnerReference(pod.ObjectMeta.OwnerReferences[0])
+	if len(ownerRef) > 0 {
+		namespace, err := getNamespaceFromOwnerReference(&pod.ObjectMeta.OwnerReferences[0])
 		if err != nil {
 			return pod, err
 		}
@@ -176,7 +178,7 @@ func deserializePod(ar *v1beta1.AdmissionReview) (corev1.Pod, error) {
 	return pod, err
 }
 
-func getNamespaceFromOwnerReference(ownerRef metav1.OwnerReference) (namespace string, err error) {
+func getNamespaceFromOwnerReference(ownerRef *metav1.OwnerReference) (namespace string, err error) {
 	namespace = ""
 	switch ownerRef.Kind {
 	case "ReplicaSet":
@@ -185,9 +187,9 @@ func getNamespaceFromOwnerReference(ownerRef metav1.OwnerReference) (namespace s
 		if err != nil {
 			return
 		}
-		for _, replicaSet := range replicaSets.Items {
-			if replicaSet.ObjectMeta.Name == ownerRef.Name && replicaSet.ObjectMeta.UID == ownerRef.UID {
-				namespace = replicaSet.ObjectMeta.Namespace
+		for i := range replicaSets.Items {
+			if replicaSets.Items[i].ObjectMeta.Name == ownerRef.Name && replicaSets.Items[i].ObjectMeta.UID == ownerRef.UID {
+				namespace = replicaSets.Items[i].ObjectMeta.Namespace
 				err = nil
 				break
 			}
@@ -198,9 +200,9 @@ func getNamespaceFromOwnerReference(ownerRef metav1.OwnerReference) (namespace s
 		if err != nil {
 			return
 		}
-		for _, daemonSet := range daemonSets.Items {
-			if daemonSet.ObjectMeta.Name == ownerRef.Name && daemonSet.ObjectMeta.UID == ownerRef.UID {
-				namespace = daemonSet.ObjectMeta.Namespace
+		for i := range daemonSets.Items {
+			if daemonSets.Items[i].ObjectMeta.Name == ownerRef.Name && daemonSets.Items[i].ObjectMeta.UID == ownerRef.UID {
+				namespace = daemonSets.Items[i].ObjectMeta.Namespace
 				err = nil
 				break
 			}
@@ -211,9 +213,9 @@ func getNamespaceFromOwnerReference(ownerRef metav1.OwnerReference) (namespace s
 		if err != nil {
 			return
 		}
-		for _, statefulSet := range statefulSets.Items {
-			if statefulSet.ObjectMeta.Name == ownerRef.Name && statefulSet.ObjectMeta.UID == ownerRef.UID {
-				namespace = statefulSet.ObjectMeta.Namespace
+		for i := range statefulSets.Items {
+			if statefulSets.Items[i].ObjectMeta.Name == ownerRef.Name && statefulSets.Items[i].ObjectMeta.UID == ownerRef.UID {
+				namespace = statefulSets.Items[i].ObjectMeta.Namespace
 				err = nil
 				break
 			}
@@ -224,9 +226,10 @@ func getNamespaceFromOwnerReference(ownerRef metav1.OwnerReference) (namespace s
 		if err != nil {
 			return
 		}
-		for _, replicationController := range replicationControllers.Items {
-			if replicationController.ObjectMeta.Name == ownerRef.Name && replicationController.ObjectMeta.UID == ownerRef.UID {
-				namespace = replicationController.ObjectMeta.Namespace
+		for i := range replicationControllers.Items {
+			if replicationControllers.Items[i].ObjectMeta.Name == ownerRef.Name &&
+				replicationControllers.Items[i].ObjectMeta.UID == ownerRef.UID {
+				namespace = replicationControllers.Items[i].ObjectMeta.Namespace
 				err = nil
 				break
 			}
@@ -241,11 +244,10 @@ func getNamespaceFromOwnerReference(ownerRef metav1.OwnerReference) (namespace s
 		err = errors.New("pod namespace is not found")
 	}
 
-	return
-
+	return namespace, err
 }
 
-func toSafeJsonPatchKey(in string) string {
+func toSafeJSONPatchKey(in string) string {
 	out := strings.Replace(in, "~", "~0", -1)
 	out = strings.Replace(out, "/", "~1", -1)
 	return out
@@ -254,7 +256,7 @@ func toSafeJsonPatchKey(in string) string {
 func parsePodNetworkSelections(podNetworks, defaultNamespace string) ([]*multus.NetworkSelectionElement, error) {
 	var networkSelections []*multus.NetworkSelectionElement
 
-	if len(podNetworks) == 0 {
+	if podNetworks == "" {
 		err := errors.New("empty string passed as network selection elements list")
 		glog.Error(err)
 		return nil, err
@@ -331,7 +333,7 @@ func parsePodNetworkSelectionElement(selection, defaultNamespace string) (*multu
 		return networkSelectionElement, err
 	}
 
-	validNameRegex, _ := regexp.Compile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
+	validNameRegex := regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
 	for _, unit := range []string{namespace, name, netInterface} {
 		ok := validNameRegex.MatchString(unit)
 		if !ok && len(unit) > 0 {
@@ -360,12 +362,13 @@ func getNetworkAttachmentDefinition(namespace, name string) (*cniv1.NetworkAttac
 	}
 
 	networkAttachmentDefinition := cniv1.NetworkAttachmentDefinition{}
-	json.Unmarshal(rawNetworkAttachmentDefinition, &networkAttachmentDefinition)
+	err = json.Unmarshal(rawNetworkAttachmentDefinition, &networkAttachmentDefinition)
 
-	return &networkAttachmentDefinition, nil
+	return &networkAttachmentDefinition, err
 }
 
-func parseNetworkAttachDefinition(net *multus.NetworkSelectionElement, reqs map[string]int64, nsMap map[string]string) (map[string]int64, map[string]string, error) {
+func parseNetworkAttachDefinition(net *multus.NetworkSelectionElement, reqs map[string]int64, nsMap map[string]string) (
+	map[string]int64, map[string]string, error) {
 	/* for each network in annotation ask API server for network-attachment-definition */
 	networkAttachmentDefinition, err := getNetworkAttachmentDefinition(net.Namespace, net.Name)
 	if err != nil {
@@ -418,13 +421,17 @@ func handleValidationError(w http.ResponseWriter, ar *v1beta1.AdmissionReview, o
 func writeResponse(w http.ResponseWriter, ar *v1beta1.AdmissionReview) {
 	glog.Infof("sending response to the Kubernetes API server")
 	resp, _ := json.Marshal(ar)
-	w.Write(resp)
+	_, err := w.Write(resp)
+
+	if err != nil {
+		glog.Warningf("write response failed: %v", err)
+	}
 }
 
 func patchEmptyResources(patch []jsonPatchOperation, containerIndex uint, key string) []jsonPatchOperation {
 	patch = append(patch, jsonPatchOperation{
 		Operation: "add",
-		Path:      "/spec/containers/" + fmt.Sprintf("%d", containerIndex) + "/resources/" + toSafeJsonPatchKey(key),
+		Path:      "/spec/containers/" + fmt.Sprintf("%d", containerIndex) + "/resources/" + toSafeJSONPatchKey(key),
 		Value:     corev1.ResourceList{},
 	})
 	return patch
@@ -489,7 +496,6 @@ func addVolDownwardAPI(patch []jsonPatchOperation, hugepageResourceList []hugepa
 }
 
 func addVolumeMount(patch []jsonPatchOperation, containersLen int) []jsonPatchOperation {
-
 	vm := corev1.VolumeMount{
 		Name:      "podnetinfo",
 		ReadOnly:  true,
@@ -512,9 +518,7 @@ func createVolPatch(patch []jsonPatchOperation, hugepageResourceList []hugepageR
 	return patch
 }
 
-func addEnvVar(patch []jsonPatchOperation, containerIndex int, firstElement bool,
-	envName string, envVal string) []jsonPatchOperation {
-
+func addEnvVar(patch []jsonPatchOperation, containerIndex int, firstElement bool, envName, envVal string) []jsonPatchOperation {
 	env := corev1.EnvVar{
 		Name:  envName,
 		Value: envVal,
@@ -537,14 +541,12 @@ func addEnvVar(patch []jsonPatchOperation, containerIndex int, firstElement bool
 	return patch
 }
 
-func createEnvPatch(patch []jsonPatchOperation, container *corev1.Container,
-	containerIndex int, envName string, envVal string) []jsonPatchOperation {
-
+func createEnvPatch(patch []jsonPatchOperation, envVar []corev1.EnvVar, containerIndex int, envName, envVal string) []jsonPatchOperation {
 	// Determine if requested ENV already exists
 	found := false
 	firstElement := false
-	if len(container.Env) != 0 {
-		for _, env := range container.Env {
+	if len(envVar) != 0 {
+		for _, env := range envVar {
 			if env.Name == envName {
 				found = true
 				if env.Value != envVal {
@@ -564,18 +566,17 @@ func createEnvPatch(patch []jsonPatchOperation, container *corev1.Container,
 	return patch
 }
 
-func createNodeSelectorPatch(patch []jsonPatchOperation, existing map[string]string, desired map[string]string) []jsonPatchOperation {
+func createNodeSelectorPatch(patch []jsonPatchOperation, existing, desired map[string]string) []jsonPatchOperation {
 	targetMap := make(map[string]string)
-	if existing != nil {
-		for k, v := range existing {
-			targetMap[k] = v
-		}
+
+	for k, v := range existing {
+		targetMap[k] = v
 	}
-	if desired != nil {
-		for k, v := range desired {
-			targetMap[k] = v
-		}
+
+	for k, v := range desired {
+		targetMap[k] = v
 	}
+
 	if len(targetMap) == 0 {
 		return patch
 	}
@@ -587,21 +588,22 @@ func createNodeSelectorPatch(patch []jsonPatchOperation, existing map[string]str
 	return patch
 }
 
-func createResourcePatch(patch []jsonPatchOperation, Containers []corev1.Container, resourceRequests map[string]int64) []jsonPatchOperation {
+func createResourcePatch(patch []jsonPatchOperation, containers []corev1.Container,
+	resourceRequests map[string]int64) []jsonPatchOperation {
 	/* check whether resources paths exists in the first container and add as the first patches if missing */
-	if len(Containers[0].Resources.Requests) == 0 {
+	if len(containers[0].Resources.Requests) == 0 {
 		patch = patchEmptyResources(patch, 0, "requests")
 	}
-	if len(Containers[0].Resources.Limits) == 0 {
+	if len(containers[0].Resources.Limits) == 0 {
 		patch = patchEmptyResources(patch, 0, "limits")
 	}
 
 	for resourceName := range resourceRequests {
-		for _, container := range Containers {
-			if _, exists := container.Resources.Limits[corev1.ResourceName(resourceName)]; exists {
+		for i := range containers {
+			if _, exists := containers[i].Resources.Limits[corev1.ResourceName(resourceName)]; exists {
 				delete(resourceRequests, resourceName)
 			}
-			if _, exists := container.Resources.Requests[corev1.ResourceName(resourceName)]; exists {
+			if _, exists := containers[i].Resources.Requests[corev1.ResourceName(resourceName)]; exists {
 				delete(resourceRequests, resourceName)
 			}
 		}
@@ -616,19 +618,20 @@ func createResourcePatch(patch []jsonPatchOperation, Containers []corev1.Contain
 	return patch
 }
 
-func updateResourcePatch(patch []jsonPatchOperation, Containers []corev1.Container, resourceRequests map[string]int64) []jsonPatchOperation {
+func updateResourcePatch(patch []jsonPatchOperation, containers []corev1.Container,
+	resourceRequests map[string]int64) []jsonPatchOperation {
 	var existingrequestsMap map[corev1.ResourceName]resource.Quantity
 	var existingLimitsMap map[corev1.ResourceName]resource.Quantity
 
-	if len(Containers[0].Resources.Requests) == 0 {
+	if len(containers[0].Resources.Requests) == 0 {
 		patch = patchEmptyResources(patch, 0, "requests")
 	} else {
-		existingrequestsMap = Containers[0].Resources.Requests
+		existingrequestsMap = containers[0].Resources.Requests
 	}
-	if len(Containers[0].Resources.Limits) == 0 {
+	if len(containers[0].Resources.Limits) == 0 {
 		patch = patchEmptyResources(patch, 0, "limits")
 	} else {
-		existingLimitsMap = Containers[0].Resources.Limits
+		existingLimitsMap = containers[0].Resources.Limits
 	}
 
 	resourceList := *getResourceList(resourceRequests)
@@ -651,14 +654,14 @@ func updateResourcePatch(patch []jsonPatchOperation, Containers []corev1.Contain
 func appendResource(patch []jsonPatchOperation, resourceName string, reqQuantity, limitQuantity resource.Quantity) []jsonPatchOperation {
 	patch = append(patch, jsonPatchOperation{
 		Operation: "add",
-		Path:      "/spec/containers/0/resources/requests/" + toSafeJsonPatchKey(resourceName),
+		Path:      "/spec/containers/0/resources/requests/" + toSafeJSONPatchKey(resourceName),
 		Value:     reqQuantity,
-	})
-	patch = append(patch, jsonPatchOperation{
-		Operation: "add",
-		Path:      "/spec/containers/0/resources/limits/" + toSafeJsonPatchKey(resourceName),
-		Value:     limitQuantity,
-	})
+	},
+		jsonPatchOperation{
+			Operation: "add",
+			Path:      "/spec/containers/0/resources/limits/" + toSafeJSONPatchKey(resourceName),
+			Value:     limitQuantity,
+		})
 
 	return patch
 }
@@ -672,7 +675,7 @@ func getResourceList(resourceRequests map[string]int64) *corev1.ResourceList {
 	return &resourceList
 }
 
-func appendPodAnnotation(patch []jsonPatchOperation, pod corev1.Pod, userDefinedPatch jsonPatchOperation) []jsonPatchOperation {
+func appendPodAnnotation(patch []jsonPatchOperation, pod *corev1.Pod, userDefinedPatch jsonPatchOperation) []jsonPatchOperation {
 	annotMap := make(map[string]string)
 	for k, v := range pod.ObjectMeta.Annotations {
 		annotMap[k] = v
@@ -682,13 +685,13 @@ func appendPodAnnotation(patch []jsonPatchOperation, pod corev1.Pod, userDefined
 	}
 	patch = append(patch, jsonPatchOperation{
 		Operation: "add",
-		Path:      "/metadata/annotations",
+		Path:      annotPath,
 		Value:     annotMap,
 	})
 	return patch
 }
 
-func createCustomizedPatch(pod corev1.Pod) ([]jsonPatchOperation, error) {
+func createCustomizedPatch(pod *corev1.Pod) []jsonPatchOperation {
 	var userDefinedPatch []jsonPatchOperation
 
 	// lock for reading
@@ -699,23 +702,23 @@ func createCustomizedPatch(pod corev1.Pod) ([]jsonPatchOperation, error) {
 		// The userDefinedInjects will be injected when:
 		// 1. Pod labels contain the patch key defined in userDefinedInjects, and
 		// 2. The value of patch key in pod labels(not in userDefinedInjects) is "true"
-		if podValue, exists := pod.ObjectMeta.Labels[k]; exists && strings.ToLower(podValue) == "true" {
+		if podValue, exists := pod.ObjectMeta.Labels[k]; exists && strings.EqualFold(podValue, "true") {
 			userDefinedPatch = append(userDefinedPatch, v)
 		}
 	}
-	return userDefinedPatch, nil
+	return userDefinedPatch
 }
 
-func appendCustomizedPatch(patch []jsonPatchOperation, pod corev1.Pod, userDefinedPatch []jsonPatchOperation) []jsonPatchOperation {
+func appendCustomizedPatch(patch []jsonPatchOperation, pod *corev1.Pod, userDefinedPatch []jsonPatchOperation) []jsonPatchOperation {
 	for _, p := range userDefinedPatch {
-		if p.Path == "/metadata/annotations" {
+		if p.Path == annotPath {
 			patch = appendPodAnnotation(patch, pod, p)
 		}
 	}
 	return patch
 }
 
-func getNetworkSelections(annotationKey string, pod corev1.Pod, userDefinedPatch []jsonPatchOperation) (string, bool) {
+func getNetworkSelections(annotationKey string, pod *corev1.Pod, userDefinedPatch []jsonPatchOperation) (string, bool) {
 	// User defined annotateKey takes precedence than userDefined injections
 	glog.Infof("search %s in original pod annotations", annotationKey)
 	nets, exists := pod.ObjectMeta.Annotations[annotationKey]
@@ -728,7 +731,7 @@ func getNetworkSelections(annotationKey string, pod corev1.Pod, userDefinedPatch
 	// userDefinedPatch may contain user defined net-attach-defs
 	if len(userDefinedPatch) > 0 {
 		for _, p := range userDefinedPatch {
-			if p.Operation == "add" && p.Path == "/metadata/annotations" {
+			if p.Operation == "add" && p.Path == annotPath {
 				for k, v := range p.Value.(map[string]interface{}) {
 					if k == annotationKey {
 						glog.Infof("%s is found in user-defined annotations", annotationKey)
@@ -763,11 +766,7 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 	}
 	glog.Infof("AdmissionReview request received for pod %s/%s", pod.ObjectMeta.Namespace, pod.ObjectMeta.Name)
 
-	userDefinedPatch, err := createCustomizedPatch(pod)
-	if err != nil {
-		glog.Warningf("failed to create user-defined injection patch for pod %s/%s, err: %v",
-			pod.ObjectMeta.Namespace, pod.ObjectMeta.Name, err)
-	}
+	userDefinedPatch := createCustomizedPatch(pod)
 
 	defaultNetSelection, defExist := getNetworkSelections(defaultNetworkAnnotationKey, pod, userDefinedPatch)
 	additionalNetSelections, addExists := getNetworkSelections(networksAnnotationKey, pod, userDefinedPatch)
@@ -846,46 +845,52 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 
 			// Determine if hugepages are being requested for a given container,
 			// and if so, expose the value to the container via Downward API.
-			var hugepageResourceList []hugepageResourceData
-			glog.Infof("injectHugepageDownApi=%v", injectHugepageDownApi)
-			if injectHugepageDownApi {
-				for containerIndex, container := range pod.Spec.Containers {
+			var (
+				hugepageResourceList []hugepageResourceData
+				res                  corev1.ResourceRequirements
+				name                 string
+			)
+			glog.Infof("injectHugepageDownAPI=%v", injectHugepageDownAPI)
+			if injectHugepageDownAPI {
+				for i := range pod.Spec.Containers {
 					found := false
-					if len(container.Resources.Requests) != 0 {
-						if quantity, exists := container.Resources.Requests["hugepages-1Gi"]; exists && quantity.IsZero() == false {
+					res = pod.Spec.Containers[i].Resources
+					name = pod.Spec.Containers[i].Name
+					if len(res.Requests) != 0 {
+						if quantity, exists := res.Requests["hugepages-1Gi"]; exists && !quantity.IsZero() {
 							hugepageResource := hugepageResourceData{
 								ResourceName:  "requests.hugepages-1Gi",
-								ContainerName: container.Name,
-								Path:          types.Hugepages1GRequestPath + "_" + container.Name,
+								ContainerName: name,
+								Path:          types.Hugepages1GRequestPath + "_" + name,
 							}
 							hugepageResourceList = append(hugepageResourceList, hugepageResource)
 							found = true
 						}
-						if quantity, exists := container.Resources.Requests["hugepages-2Mi"]; exists && quantity.IsZero() == false {
+						if quantity, exists := res.Requests["hugepages-2Mi"]; exists && !quantity.IsZero() {
 							hugepageResource := hugepageResourceData{
 								ResourceName:  "requests.hugepages-2Mi",
-								ContainerName: container.Name,
-								Path:          types.Hugepages2MRequestPath + "_" + container.Name,
+								ContainerName: name,
+								Path:          types.Hugepages2MRequestPath + "_" + name,
 							}
 							hugepageResourceList = append(hugepageResourceList, hugepageResource)
 							found = true
 						}
 					}
-					if len(container.Resources.Limits) != 0 {
-						if quantity, exists := container.Resources.Limits["hugepages-1Gi"]; exists && quantity.IsZero() == false {
+					if len(res.Limits) != 0 {
+						if quantity, exists := res.Limits["hugepages-1Gi"]; exists && !quantity.IsZero() {
 							hugepageResource := hugepageResourceData{
 								ResourceName:  "limits.hugepages-1Gi",
-								ContainerName: container.Name,
-								Path:          types.Hugepages1GLimitPath + "_" + container.Name,
+								ContainerName: name,
+								Path:          types.Hugepages1GLimitPath + "_" + name,
 							}
 							hugepageResourceList = append(hugepageResourceList, hugepageResource)
 							found = true
 						}
-						if quantity, exists := container.Resources.Limits["hugepages-2Mi"]; exists && quantity.IsZero() == false {
+						if quantity, exists := res.Limits["hugepages-2Mi"]; exists && !quantity.IsZero() {
 							hugepageResource := hugepageResourceData{
 								ResourceName:  "limits.hugepages-2Mi",
-								ContainerName: container.Name,
-								Path:          types.Hugepages2MLimitPath + "_" + container.Name,
+								ContainerName: name,
+								Path:          types.Hugepages2MLimitPath + "_" + name,
 							}
 							hugepageResourceList = append(hugepageResourceList, hugepageResource)
 							found = true
@@ -896,12 +901,11 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 					// 'container.Name' as an environment variable to the container
 					// so container knows its name and can process hugepages properly.
 					if found {
-						patch = createEnvPatch(patch, &container, containerIndex,
-							types.EnvNameContainerName, container.Name)
+						patch = createEnvPatch(patch, pod.Spec.Containers[i].Env, i, types.EnvNameContainerName, name)
 					}
 				}
 			}
-			patch = createVolPatch(patch, hugepageResourceList, &pod)
+			patch = createVolPatch(patch, hugepageResourceList, pod)
 			patch = appendCustomizedPatch(patch, pod, userDefinedPatch)
 		}
 		patch = createNodeSelectorPatch(patch, pod.Spec.NodeSelector, desiredNsMap)
@@ -924,7 +928,6 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 	}
-
 	writeResponse(w, ar)
 }
 
@@ -956,8 +959,8 @@ func SetupInClusterClient() kubernetes.Interface {
 
 // SetInjectHugepageDownApi sets a flag to indicate whether or not to inject the
 // hugepage request and limit for the Downward API.
-func SetInjectHugepageDownApi(hugepageFlag bool) {
-	injectHugepageDownApi = hugepageFlag
+func SetInjectHugepageDownAPI(hugepageFlag bool) {
+	injectHugepageDownAPI = hugepageFlag
 }
 
 // SetHonorExistingResources initialize the honorExistingResources flag
@@ -984,7 +987,7 @@ func SetCustomizedInjections(injections *corev1.ConfigMap) {
 		}
 		// metadata.Annotations is the only supported field for user definition
 		// jsonPatchOperation.Path should be "/metadata/annotations"
-		if patch.Path != "/metadata/annotations" {
+		if patch.Path != annotPath {
 			glog.Errorf("Path: %v is not supported, only /metadata/annotations can be defined by user", patch.Path)
 			continue
 		}
@@ -994,7 +997,7 @@ func SetCustomizedInjections(injections *corev1.ConfigMap) {
 		}
 	}
 	// remove stale entries from userDefined configMap
-	for k, _ := range userDefinedPatchs {
+	for k := range userDefinedPatchs {
 		if _, ok := injections.Data[k]; ok {
 			continue
 		}

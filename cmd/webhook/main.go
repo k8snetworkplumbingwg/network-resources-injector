@@ -15,39 +15,46 @@
 package main
 
 import (
-	"crypto/tls"
 	"context"
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"net/http"
 	"os"
 	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"github.com/fsnotify/fsnotify"
 	"github.com/golang/glog"
+	"github.com/k8snetworkplumbingwg/network-resources-injector/pkg/types"
 	"github.com/k8snetworkplumbingwg/network-resources-injector/pkg/webhook"
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
-	defaultClientCa              = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+	defaultClientCa               = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
 	userDefinedInjectionConfigMap = "nri-user-defined-injections"
+	userDefinedInjectionInterval  = 30 * time.Second
 )
 
 func main() {
 	var namespace string
 	var clientCAPaths webhook.ClientCAFlags
 	/* load configuration */
-	port := flag.Int("port", 8443, "The port on which to serve.")
+	port := flag.Int("port", types.DefaultWebhookPort, "The port on which to serve.")
 	address := flag.String("bind-address", "0.0.0.0", "The IP address on which to listen for the --port port.")
 	cert := flag.String("tls-cert-file", "cert.pem", "File containing the default x509 Certificate for HTTPS.")
-	key := flag.String("tls-private-key-file", "key.pem", "File containing the default x509 private key matching --tls-cert-file.")
+	key := flag.String("tls-private-key-file", "key.pem",
+		"File containing the default x509 private key matching --tls-cert-file.")
 	insecure := flag.Bool("insecure", false, "Disable adding client CA to server TLS endpoint --insecure")
-	injectHugepageDownApi := flag.Bool("injectHugepageDownApi", false, "Enable hugepage requests and limits into Downward API.")
-	flag.Var(&clientCAPaths, "client-ca", "File containing client CA. This flag is repeatable if more than one client CA needs to be added to server")
-	resourceNameKeys := flag.String("network-resource-name-keys", "k8s.v1.cni.cncf.io/resourceName", "comma separated resource name keys --network-resource-name-keys.")
-	resourcesHonorFlag := flag.Bool("honor-resources", false, "Honor the existing requested resources requests & limits --honor-resources")
+	injectHugepageDownAPI := flag.Bool("injectHugepageDownApi", false,
+		"Enable hugepage requests and limits into Downward API.")
+	flag.Var(&clientCAPaths, "client-ca",
+		"File containing client CA. This flag is repeatable if more than one client CA needs to be added to server")
+	resourceNameKeys := flag.String("network-resource-name-keys", "k8s.v1.cni.cncf.io/resourceName",
+		"comma separated resource name keys --network-resource-name-keys.")
+	resourcesHonorFlag := flag.Bool("honor-resources", false,
+		"Honor the existing requested resources requests & limits --honor-resources")
 	flag.Parse()
 
 	if *port < 1024 || *port > 65535 {
@@ -68,7 +75,7 @@ func main() {
 
 	glog.Infof("starting mutating admission controller for network resources injection")
 
-	keyPair, err := webhook.NewTlsKeypairReloader(*cert, *key)
+	keyPair, err := webhook.NewTLSKeypairReloader(*cert, *key)
 	if err != nil {
 		glog.Fatalf("error load certificate: %s", err.Error())
 	}
@@ -81,7 +88,7 @@ func main() {
 	/* init API client */
 	clientset := webhook.SetupInClusterClient()
 
-	webhook.SetInjectHugepageDownApi(*injectHugepageDownApi)
+	webhook.SetInjectHugepageDownAPI(*injectHugepageDownAPI)
 
 	webhook.SetHonorExistingResources(*resourcesHonorFlag)
 
@@ -100,7 +107,7 @@ func main() {
 				return
 			}
 			if r.Method != http.MethodPost {
-				http.Error(w, "Invalid HTTP verb requested", 405)
+				http.Error(w, "invalid HTTP verb requested", http.StatusMethodNotAllowed)
 				return
 			}
 			webhook.MutateHandler(w, r)
@@ -149,8 +156,14 @@ func main() {
 	keyUpdated := false
 
 	for {
-		watcher.Add(*cert)
-		watcher.Add(*key)
+		err := watcher.Add(*cert)
+		if err != nil {
+			glog.Fatalf("error adding cert: %v", err)
+		}
+		err = watcher.Add(*key)
+		if err != nil {
+			glog.Fatalf("error adding key: %v", err)
+		}
 
 		select {
 		case event, ok := <-watcher.Events:
@@ -181,7 +194,7 @@ func main() {
 				continue
 			}
 			glog.Infof("watcher error: %v", err)
-		case <-time.After(30 * time.Second):
+		case <-time.After(userDefinedInjectionInterval):
 			cm, err := clientset.CoreV1().ConfigMaps(namespace).Get(
 				context.Background(), userDefinedInjectionConfigMap, metav1.GetOptions{})
 			if err != nil {
