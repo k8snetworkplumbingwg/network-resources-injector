@@ -174,7 +174,7 @@ func createMutatingWebhookConfiguration(certificate []byte) error {
 	return err
 }
 
-func createService() error {
+func createService(webhookPort, webhookSvcPort int) error {
 	serviceName := strings.Join([]string{prefix, "service"}, "-")
 	removeServiceIfExists(serviceName)
 	service := &corev1.Service{
@@ -186,9 +186,9 @@ func createService() error {
 		},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
-				corev1.ServicePort{
-					Port:       443,
-					TargetPort: intstr.FromInt(8443),
+				{
+					Port:       int32(webhookSvcPort),
+					TargetPort: intstr.FromInt(webhookPort),
 				},
 			},
 			Selector: map[string]string{
@@ -227,7 +227,7 @@ func removeMutatingWebhookIfExists(configName string) {
 }
 
 // Install creates resources required by mutating admission webhook
-func Install(k8sNamespace, namePrefix string) {
+func Install(k8sNamespace, namePrefix string, webhookPort, webhookSvcPort int) {
 	/* setup Kubernetes API client */
 	config, err := rest.InClusterConfig()
 	if err != nil {
@@ -269,7 +269,7 @@ func Install(k8sNamespace, namePrefix string) {
 	glog.Infof("mutating webhook configuration successfully created")
 
 	/* create service */
-	err = createService()
+	err = createService(webhookPort, webhookSvcPort)
 	if err != nil {
 		glog.Fatalf("error creating service: %s", err)
 	}

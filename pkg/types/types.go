@@ -23,4 +23,6 @@ const (
 	Hugepages2MRequestPath = "hugepages_2M_request"
 	Hugepages1GLimitPath   = "hugepages_1G_limit"
 	Hugepages2MLimitPath   = "hugepages_2M_limit"
+	DefaultWebhookPort     = 8443
+	DefaultServicePort     = 443
 )

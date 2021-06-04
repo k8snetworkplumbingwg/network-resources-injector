@@ -16,15 +16,26 @@ package main
 
 import (
 	"flag"
+
 	"github.com/golang/glog"
 	"github.com/k8snetworkplumbingwg/network-resources-injector/pkg/installer"
+	"github.com/k8snetworkplumbingwg/network-resources-injector/pkg/types"
 )
 
 func main() {
-	namespace := flag.String("namespace", "kube-system", "Namespace in which all Kubernetes resources will be created.")
-	prefix := flag.String("name", "network-resources-injector", "Prefix added to the names of all created resources.")
+	namespace := flag.String("namespace", "kube-system",
+		"Namespace in which all Kubernetes resources will be created.")
+	prefix := flag.String("name", "network-resources-injector",
+		"Prefix added to the names of all created resources.")
+	webhookPort := flag.Int("webhook-port", types.DefaultWebhookPort, "Port number which webhook will serve")
+	webhookSvcPort := flag.Int("webhook-service-port", types.DefaultServicePort, "Port number for webhook service")
+
+	if *webhookPort < 1024 || *webhookPort > 65535 {
+		glog.Fatalf("invalid port number. Choose between 1024 and 65535")
+	}
+
 	flag.Parse()
 
 	glog.Info("starting webhook installation")
-	installer.Install(*namespace, *prefix)
+	installer.Install(*namespace, *prefix, *webhookPort, *webhookSvcPort)
 }
