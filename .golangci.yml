@@ -72,7 +72,7 @@ linters:
     - gocyclo
     - gofmt
     - goimports
-    - golint
+      #- golint
     - gomnd
     - goprintffuncname
     - gosec
