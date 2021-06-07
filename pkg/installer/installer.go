@@ -132,9 +132,9 @@ func createMutatingWebhookConfiguration(certificate []byte, failurePolicyStr str
 	serviceName := strings.Join([]string{prefix, "service"}, "-")
 	removeMutatingWebhookIfExists(configName)
 	var failurePolicy arv1beta1.FailurePolicyType
-	if failurePolicyStr == "Ignore" {
+	if strings.EqualFold(strings.TrimSpace(failurePolicyStr), "Ignore") {
 		failurePolicy = arv1beta1.Ignore
-	} else if failurePolicyStr == "Fail" {
+	} else if strings.EqualFold(strings.TrimSpace(failurePolicyStr), "Fail") {
 		failurePolicy = arv1beta1.Fail
 	} else {
 		return errors.New("unknown failure policy type")
