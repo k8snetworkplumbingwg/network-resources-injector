@@ -24,7 +24,7 @@ import (
 func main() {
 	namespace := flag.String("namespace", "kube-system", "Namespace in which all Kubernetes resources will be created.")
 	prefix := flag.String("name", "network-resources-injector", "Prefix added to the names of all created resources.")
-	failurePolicy := flag.String("failure-policy", "Ignore", "failure policy to handle unrecognized errors and timeout errors")
+	failurePolicy := flag.String("failure-policy", "Ignore", "K8 admission controller failure policy to handle unrecognized errors and timeout errors")
 	flag.Parse()
 
 	glog.Info("starting webhook installation")
