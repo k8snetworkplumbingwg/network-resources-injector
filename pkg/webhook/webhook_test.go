@@ -28,7 +28,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"gopkg.in/intel/multus-cni.v3/types"
+	"gopkg.in/intel/multus-cni.v3/pkg/types"
 )
 
 var _ = Describe("Webhook", func() {
