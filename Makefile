@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+SHELL := /usr/bin/env bash
+
 default :
 	scripts/build.sh
 
@@ -26,10 +28,9 @@ vendor :
 	go mod tidy && go mod vendor
 
 e2e:
-	scripts/e2e_get_tools.sh
-	scripts/e2e_setup_cluster.sh
+	source scripts/e2e_get_tools.sh && scripts/e2e_setup_cluster.sh
 	go test ./test/e2e/...
 
 e2e-clean:
-	scripts/e2e_teardown_cluster.sh
+	source scripts/e2e_get_tools.sh && scripts/e2e_teardown_cluster.sh
 	scripts/e2e_cleanup.sh

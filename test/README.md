@@ -5,7 +5,7 @@
 ```
 $ git clone https://github.com/k8snetworkplumbingwg/network-resources-injector.git
 $ cd network-resources-injector/
-$ ./scripts/e2e_get_tools.sh
+$ source scripts/e2e_get_tools.sh
 $ ./scripts/e2e_setup_cluster.sh
 $ go test ./test/e2e/...
 ```

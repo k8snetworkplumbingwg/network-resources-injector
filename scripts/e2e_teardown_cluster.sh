@@ -1,11 +1,8 @@
 #!/bin/bash
 # Teardown Kind cluster
 
-root="$(dirname "$0")/../"
-export PATH="${PATH}:${root:?}bin"
-
 if ! command -v kind &> /dev/null; then
-  echo "kind is not available. Run 'make e2e' first"
+  echo "KinD is not available"
   exit 1
 fi
 
