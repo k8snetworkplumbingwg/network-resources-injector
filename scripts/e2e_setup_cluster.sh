@@ -7,8 +7,8 @@ set -eo pipefail
 # For simplicity sake, we use the pre-generated CA cert and key as the
 # credentials for NRI.
 
-root="$(dirname "$0")/../"
-export PATH="${PATH}:${root:?}/bin"
+here="$(dirname "$(readlink --canonicalize "${BASH_SOURCE[0]}")")"
+root="$(readlink --canonicalize "$here/..")"
 RETRY_MAX=10
 INTERVAL=10
 TIMEOUT=300
