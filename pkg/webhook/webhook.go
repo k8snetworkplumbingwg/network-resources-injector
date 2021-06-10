@@ -31,6 +31,7 @@ import (
 	"github.com/pkg/errors"
 	multus "gopkg.in/intel/multus-cni.v3/pkg/types"
 
+	netcache "github.com/k8snetworkplumbingwg/network-resources-injector/pkg/tools"
 	"github.com/k8snetworkplumbingwg/network-resources-injector/pkg/types"
 	"k8s.io/api/admission/v1beta1"
 	v1 "k8s.io/api/apps/v1"
@@ -72,6 +73,7 @@ var (
 	resourceNameKeys       []string
 	honorExistingResources bool
 	userDefinedInjects     = &userDefinedInjections{Patchs: make(map[string]jsonPatchOperation)}
+	nadCache               netcache.NetAttachDefCacheService
 )
 
 func prepareAdmissionReviewResponse(allowed bool, message string, ar *v1beta1.AdmissionReview) error {
@@ -367,18 +369,24 @@ func getNetworkAttachmentDefinition(namespace, name string) (*cniv1.NetworkAttac
 
 func parseNetworkAttachDefinition(net *multus.NetworkSelectionElement, reqs map[string]int64, nsMap map[string]string) (map[string]int64, map[string]string, error) {
 	/* for each network in annotation ask API server for network-attachment-definition */
-	networkAttachmentDefinition, err := getNetworkAttachmentDefinition(net.Namespace, net.Name)
-	if err != nil {
-		/* if doesn't exist: deny pod */
-		reason := errors.Wrapf(err, "could not find network attachment definition '%s/%s'", net.Namespace, net.Name)
-		glog.Error(reason)
-		return reqs, nsMap, reason
+	var annotationsMap map[string]string
+	annotationsMap = nadCache.Get(net.Namespace + "/" + net.Name)
+	if annotationsMap == nil {
+		glog.Infof("cache entry not found, retrieving network attachment definition '%s/%s' from api server", net.Namespace, net.Name)
+		networkAttachmentDefinition, err := getNetworkAttachmentDefinition(net.Namespace, net.Name)
+		if err != nil {
+			/* if doesn't exist: deny pod */
+			reason := errors.Wrapf(err, "could not find network attachment definition '%s/%s'", net.Namespace, net.Name)
+			glog.Error(reason)
+			return reqs, nsMap, reason
+		}
+		annotationsMap = networkAttachmentDefinition.GetAnnotations()
 	}
 	glog.Infof("network attachment definition '%s/%s' found", net.Namespace, net.Name)
 
 	/* network object exists, so check if it contains resourceName annotation */
 	for _, networkResourceNameKey := range resourceNameKeys {
-		if resourceName, exists := networkAttachmentDefinition.ObjectMeta.Annotations[networkResourceNameKey]; exists {
+		if resourceName, exists := annotationsMap[networkResourceNameKey]; exists {
 			/* add resource to map/increment if it was already there */
 			reqs[resourceName]++
 			glog.Infof("resource '%s' needs to be requested for network '%s/%s'", resourceName, net.Namespace, net.Name)
@@ -388,7 +396,7 @@ func parseNetworkAttachDefinition(net *multus.NetworkSelectionElement, reqs map[
 	}
 
 	/* parse the net-attach-def annotations for node selector label and add it to the desiredNsMap */
-	if ns, exists := networkAttachmentDefinition.ObjectMeta.Annotations[nodeSelectorKey]; exists {
+	if ns, exists := annotationsMap[nodeSelectorKey]; exists {
 		nsNameValue := strings.Split(ns, "=")
 		nsNameValueLen := len(nsNameValue)
 		if nsNameValueLen > 2 {
@@ -940,6 +948,11 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 	}
 
 	writeResponse(w, ar)
+}
+
+// SetNetAttachDefCache sets up the net attach def cache service
+func SetNetAttachDefCache(cache netcache.NetAttachDefCacheService) {
+	nadCache = cache
 }
 
 // SetResourceNameKeys extracts resources from a string and add them to resourceNameKeys array

@@ -15,23 +15,24 @@
 package main
 
 import (
-	"crypto/tls"
 	"context"
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"net/http"
 	"os"
 	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"github.com/fsnotify/fsnotify"
 	"github.com/golang/glog"
+	netcache "github.com/k8snetworkplumbingwg/network-resources-injector/pkg/tools"
 	"github.com/k8snetworkplumbingwg/network-resources-injector/pkg/webhook"
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
-	defaultClientCa              = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+	defaultClientCa               = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
 	userDefinedInjectionConfigMap = "nri-user-defined-injections"
 )
 
@@ -89,6 +90,11 @@ func main() {
 	if err != nil {
 		glog.Fatalf("error in setting resource name keys: %s", err.Error())
 	}
+
+	//initiaze webhook with cache
+	netAnnotationCache := netcache.Create()
+	netAnnotationCache.Start()
+	webhook.SetNetAttachDefCache(netAnnotationCache)
 
 	go func() {
 		/* register handlers */
@@ -193,4 +199,7 @@ func main() {
 			webhook.SetCustomizedInjections(cm)
 		}
 	}
+
+	// TODO: find a way to stop cache, should we run the above block in a go routine and make main module
+	// to respond to terminate singal ?
 }
