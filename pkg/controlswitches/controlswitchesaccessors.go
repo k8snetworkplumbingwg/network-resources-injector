@@ -19,13 +19,12 @@
 
 package controlswitches
 
-func SetupControlSwitchesUnitTests(downAPI, honor, injection *bool, name *string) *ControlSwitches {
+func SetupControlSwitchesUnitTests(downAPI, honor *bool, name *string) *ControlSwitches {
 	var initFlags ControlSwitches
 
 	initFlags.injectHugepageDownAPI = downAPI
 	initFlags.resourceNameKeysFlag = name
 	initFlags.resourcesHonorFlag = honor
-	initFlags.userInjectionFlag = injection
 
 	return &initFlags
 }

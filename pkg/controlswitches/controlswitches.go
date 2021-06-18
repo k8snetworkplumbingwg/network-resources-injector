@@ -33,8 +33,6 @@ const (
 	enableHugePageDownAPIKey = "enableHugePageDownApi"
 	// enableHonorExistingResourcesKey feature name
 	enableHonorExistingResourcesKey = "enableHonorExistingResources"
-	// enableCustomizedInjectionKey feature name
-	enableCustomizedInjectionKey = "enableCustomizedInjection"
 )
 
 // controlSwitchesStates - depicts possible feature states
@@ -58,7 +56,6 @@ type ControlSwitches struct {
 	injectHugepageDownAPI *bool
 	resourceNameKeysFlag  *string
 	resourcesHonorFlag    *bool
-	userInjectionFlag     *bool
 
 	configuration    map[string]controlSwitchesStates
 	resourceNameKeys []string
@@ -73,7 +70,6 @@ func SetupControlSwitchesFlags() *ControlSwitches {
 	initFlags.injectHugepageDownAPI = flag.Bool("injectHugepageDownApi", false, "Enable hugepage requests and limits into Downward API.")
 	initFlags.resourceNameKeysFlag = flag.String("network-resource-name-keys", "k8s.v1.cni.cncf.io/resourceName", "comma separated resource name keys --network-resource-name-keys.")
 	initFlags.resourcesHonorFlag = flag.Bool("honor-resources", false, "Honor the existing requested resources requests & limits --honor-resources")
-	initFlags.userInjectionFlag = flag.Bool("user-injections", true, "Enable / disable user defined injections --user-injections")
 
 	return &initFlags
 }
@@ -87,9 +83,6 @@ func (switches *ControlSwitches) InitControlSwitches() {
 
 	state = controlSwitchesStates{initial: *switches.resourcesHonorFlag, active: *switches.resourcesHonorFlag}
 	switches.configuration[enableHonorExistingResourcesKey] = state
-
-	state = controlSwitchesStates{initial: *switches.userInjectionFlag, active: *switches.userInjectionFlag}
-	switches.configuration[enableCustomizedInjectionKey] = state
 
 	switches.resourceNameKeys = setResourceNameKeys(*switches.resourceNameKeysFlag)
 
@@ -120,10 +113,6 @@ func (switches *ControlSwitches) IsHonorExistingResourcesEnabled() bool {
 	return switches.configuration[enableHonorExistingResourcesKey].active
 }
 
-func (switches *ControlSwitches) IsCustomizedInjectionsEnabled() bool {
-	return switches.configuration[enableCustomizedInjectionKey].active
-}
-
 func (switches *ControlSwitches) IsResourcesNameEnabled() bool {
 	return len(*switches.resourceNameKeysFlag) > 0
 }
@@ -139,7 +128,6 @@ func (switches *ControlSwitches) GetAllFeaturesState() string {
 
 	output = fmt.Sprintf("HugePageInject: %t", switches.IsHugePagedownAPIEnabled())
 	output = output + " / " + fmt.Sprintf("HonorExistingResources: %t", switches.IsHonorExistingResourcesEnabled())
-	output = output + " / " + fmt.Sprintf("Custom Injections: %t", switches.IsCustomizedInjectionsEnabled())
 	output = output + " / " + fmt.Sprintf("EnableResourceNames: %t", switches.IsResourcesNameEnabled())
 
 	return output
@@ -154,10 +142,6 @@ func (switches *ControlSwitches) setAllFeaturesToInitialState() {
 	state = switches.configuration[enableHonorExistingResourcesKey]
 	state.setActiveToInitialState()
 	switches.configuration[enableHonorExistingResourcesKey] = state
-
-	state = switches.configuration[enableCustomizedInjectionKey]
-	state.setActiveToInitialState()
-	switches.configuration[enableCustomizedInjectionKey] = state
 }
 
 // setFeatureToState set given feature to the state defined in the map object
@@ -199,7 +183,6 @@ func (switches *ControlSwitches) ProcessControlSwitchesConfigMap(controlSwitches
 
 			switches.setFeatureToState(enableHugePageDownAPIKey, switchObj)
 			switches.setFeatureToState(enableHonorExistingResourcesKey, switchObj)
-			switches.setFeatureToState(enableCustomizedInjectionKey, switchObj)
 		} else {
 			glog.Warningf("Map does not contains [%s]", controlSwitchesMainKey)
 		}

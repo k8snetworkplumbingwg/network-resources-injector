@@ -37,7 +37,7 @@ var _ = Describe("Verify controlswitches package", func() {
 	Describe("Common functions", func() {
 		Context("Display features", func() {
 			BeforeEach(func() {
-				structure = SetupControlSwitchesUnitTests(createBool(false), createBool(false), createBool(false), createString(""))
+				structure = SetupControlSwitchesUnitTests(createBool(false), createBool(false), createString(""))
 				structure.InitControlSwitches()
 			})
 
@@ -94,31 +94,27 @@ var _ = Describe("Verify controlswitches package", func() {
 			})
 
 			It("Feature set to false, other features set to true", func() {
-				structure = SetupControlSwitchesUnitTests(createBool(false), createBool(true), createBool(true), createString("something"))
+				structure = SetupControlSwitchesUnitTests(createBool(false), createBool(true), createString("something"))
 				structure.InitControlSwitches()
 
 				Expect(structure.IsHugePagedownAPIEnabled()).Should(Equal(false))
 				Expect(structure.IsHonorExistingResourcesEnabled()).Should(Equal(true))
-				Expect(structure.IsCustomizedInjectionsEnabled()).Should(Equal(true))
 				Expect(structure.IsResourcesNameEnabled()).Should(Equal(true))
 
 				Expect(structure.configuration[enableHugePageDownAPIKey].initial).Should(Equal(false))
 				Expect(structure.configuration[enableHonorExistingResourcesKey].initial).Should(Equal(true))
-				Expect(structure.configuration[enableCustomizedInjectionKey].initial).Should(Equal(true))
 			})
 
 			It("Feature set to true, other features set to false", func() {
-				structure = SetupControlSwitchesUnitTests(createBool(true), createBool(false), createBool(false), createString(""))
+				structure = SetupControlSwitchesUnitTests(createBool(true), createBool(false), createString(""))
 				structure.InitControlSwitches()
 
 				Expect(structure.IsHugePagedownAPIEnabled()).Should(Equal(true))
 				Expect(structure.IsHonorExistingResourcesEnabled()).Should(Equal(false))
-				Expect(structure.IsCustomizedInjectionsEnabled()).Should(Equal(false))
 				Expect(structure.IsResourcesNameEnabled()).Should(Equal(false))
 
 				Expect(structure.configuration[enableHugePageDownAPIKey].initial).Should(Equal(true))
 				Expect(structure.configuration[enableHonorExistingResourcesKey].initial).Should(Equal(false))
-				Expect(structure.configuration[enableCustomizedInjectionKey].initial).Should(Equal(false))
 			})
 		})
 	})
@@ -130,31 +126,27 @@ var _ = Describe("Verify controlswitches package", func() {
 			})
 
 			It("Feature set to false, other features set to true", func() {
-				structure = SetupControlSwitchesUnitTests(createBool(true), createBool(false), createBool(true), createString("something"))
+				structure = SetupControlSwitchesUnitTests(createBool(true), createBool(false), createString("something"))
 				structure.InitControlSwitches()
 
 				Expect(structure.IsHugePagedownAPIEnabled()).Should(Equal(true))
 				Expect(structure.IsHonorExistingResourcesEnabled()).Should(Equal(false))
-				Expect(structure.IsCustomizedInjectionsEnabled()).Should(Equal(true))
 				Expect(structure.IsResourcesNameEnabled()).Should(Equal(true))
 
 				Expect(structure.configuration[enableHugePageDownAPIKey].initial).Should(Equal(true))
 				Expect(structure.configuration[enableHonorExistingResourcesKey].initial).Should(Equal(false))
-				Expect(structure.configuration[enableCustomizedInjectionKey].initial).Should(Equal(true))
 			})
 
 			It("Feature set to true, other features set to false", func() {
-				structure = SetupControlSwitchesUnitTests(createBool(false), createBool(true), createBool(false), createString(""))
+				structure = SetupControlSwitchesUnitTests(createBool(false), createBool(true), createString(""))
 				structure.InitControlSwitches()
 
 				Expect(structure.IsHugePagedownAPIEnabled()).Should(Equal(false))
 				Expect(structure.IsHonorExistingResourcesEnabled()).Should(Equal(true))
-				Expect(structure.IsCustomizedInjectionsEnabled()).Should(Equal(false))
 				Expect(structure.IsResourcesNameEnabled()).Should(Equal(false))
 
 				Expect(structure.configuration[enableHugePageDownAPIKey].initial).Should(Equal(false))
 				Expect(structure.configuration[enableHonorExistingResourcesKey].initial).Should(Equal(true))
-				Expect(structure.configuration[enableCustomizedInjectionKey].initial).Should(Equal(false))
 			})
 		})
 	})
@@ -166,33 +158,29 @@ var _ = Describe("Verify controlswitches package", func() {
 			})
 
 			It("Feature set to false, other features set to true", func() {
-				structure = SetupControlSwitchesUnitTests(createBool(true), createBool(true), createBool(true), createString(""))
+				structure = SetupControlSwitchesUnitTests(createBool(true), createBool(true), createString(""))
 				structure.InitControlSwitches()
 
 				Expect(structure.IsHugePagedownAPIEnabled()).Should(Equal(true))
 				Expect(structure.IsHonorExistingResourcesEnabled()).Should(Equal(true))
-				Expect(structure.IsCustomizedInjectionsEnabled()).Should(Equal(true))
 				Expect(structure.IsResourcesNameEnabled()).Should(Equal(false))
 
 				Expect(structure.configuration[enableHugePageDownAPIKey].initial).Should(Equal(true))
 				Expect(structure.configuration[enableHonorExistingResourcesKey].initial).Should(Equal(true))
-				Expect(structure.configuration[enableCustomizedInjectionKey].initial).Should(Equal(true))
 
 				Expect(structure.GetResourceNameKeys()).Should(Equal([]string{""}))
 			})
 
 			It("Feature set to true, other features set to false", func() {
-				structure = SetupControlSwitchesUnitTests(createBool(false), createBool(false), createBool(false), createString("something"))
+				structure = SetupControlSwitchesUnitTests(createBool(false), createBool(false), createString("something"))
 				structure.InitControlSwitches()
 
 				Expect(structure.IsHugePagedownAPIEnabled()).Should(Equal(false))
 				Expect(structure.IsHonorExistingResourcesEnabled()).Should(Equal(false))
-				Expect(structure.IsCustomizedInjectionsEnabled()).Should(Equal(false))
 				Expect(structure.IsResourcesNameEnabled()).Should(Equal(true))
 
 				Expect(structure.configuration[enableHugePageDownAPIKey].initial).Should(Equal(false))
 				Expect(structure.configuration[enableHonorExistingResourcesKey].initial).Should(Equal(false))
-				Expect(structure.configuration[enableCustomizedInjectionKey].initial).Should(Equal(false))
 
 				Expect(structure.GetResourceNameKeys()).Should(Equal([]string{"something"}))
 			})
@@ -206,31 +194,27 @@ var _ = Describe("Verify controlswitches package", func() {
 			})
 
 			It("Feature set to false, other features set to true", func() {
-				structure = SetupControlSwitchesUnitTests(createBool(true), createBool(true), createBool(false), createString("something"))
+				structure = SetupControlSwitchesUnitTests(createBool(true), createBool(true), createString("something"))
 				structure.InitControlSwitches()
 
 				Expect(structure.IsHugePagedownAPIEnabled()).Should(Equal(true))
 				Expect(structure.IsHonorExistingResourcesEnabled()).Should(Equal(true))
-				Expect(structure.IsCustomizedInjectionsEnabled()).Should(Equal(false))
 				Expect(structure.IsResourcesNameEnabled()).Should(Equal(true))
 
 				Expect(structure.configuration[enableHugePageDownAPIKey].initial).Should(Equal(true))
 				Expect(structure.configuration[enableHonorExistingResourcesKey].initial).Should(Equal(true))
-				Expect(structure.configuration[enableCustomizedInjectionKey].initial).Should(Equal(false))
 			})
 
 			It("Feature set to true, other features set to false", func() {
-				structure = SetupControlSwitchesUnitTests(createBool(false), createBool(false), createBool(true), createString(""))
+				structure = SetupControlSwitchesUnitTests(createBool(false), createBool(false), createString(""))
 				structure.InitControlSwitches()
 
 				Expect(structure.IsHugePagedownAPIEnabled()).Should(Equal(false))
 				Expect(structure.IsHonorExistingResourcesEnabled()).Should(Equal(false))
-				Expect(structure.IsCustomizedInjectionsEnabled()).Should(Equal(true))
 				Expect(structure.IsResourcesNameEnabled()).Should(Equal(false))
 
 				Expect(structure.configuration[enableHugePageDownAPIKey].initial).Should(Equal(false))
 				Expect(structure.configuration[enableHonorExistingResourcesKey].initial).Should(Equal(false))
-				Expect(structure.configuration[enableCustomizedInjectionKey].initial).Should(Equal(true))
 			})
 		})
 	})
@@ -238,7 +222,7 @@ var _ = Describe("Verify controlswitches package", func() {
 	Describe("Process Control Switches config map", func() {
 		Context("Map without [features]", func() {
 			BeforeEach(func() {
-				structure = SetupControlSwitchesUnitTests(createBool(false), createBool(false), createBool(false), createString(""))
+				structure = SetupControlSwitchesUnitTests(createBool(false), createBool(false), createString(""))
 				structure.InitControlSwitches()
 			})
 
@@ -255,12 +239,10 @@ var _ = Describe("Verify controlswitches package", func() {
 
 				Expect(structure.IsHugePagedownAPIEnabled()).Should(Equal(false))
 				Expect(structure.IsHonorExistingResourcesEnabled()).Should(Equal(false))
-				Expect(structure.IsCustomizedInjectionsEnabled()).Should(Equal(false))
 				Expect(structure.IsResourcesNameEnabled()).Should(Equal(false))
 
 				Expect(structure.configuration[enableHugePageDownAPIKey].initial).Should(Equal(false))
 				Expect(structure.configuration[enableHonorExistingResourcesKey].initial).Should(Equal(false))
-				Expect(structure.configuration[enableCustomizedInjectionKey].initial).Should(Equal(false))
 			})
 
 			It("Map without config.json key", func() {
@@ -272,12 +254,10 @@ var _ = Describe("Verify controlswitches package", func() {
 
 				Expect(structure.IsHugePagedownAPIEnabled()).Should(Equal(false))
 				Expect(structure.IsHonorExistingResourcesEnabled()).Should(Equal(false))
-				Expect(structure.IsCustomizedInjectionsEnabled()).Should(Equal(false))
 				Expect(structure.IsResourcesNameEnabled()).Should(Equal(false))
 
 				Expect(structure.configuration[enableHugePageDownAPIKey].initial).Should(Equal(false))
 				Expect(structure.configuration[enableHonorExistingResourcesKey].initial).Should(Equal(false))
-				Expect(structure.configuration[enableCustomizedInjectionKey].initial).Should(Equal(false))
 			})
 
 			It("Map with correct key, but without [features] inside", func() {
@@ -303,12 +283,10 @@ var _ = Describe("Verify controlswitches package", func() {
 
 				Expect(structure.IsHugePagedownAPIEnabled()).Should(Equal(false))
 				Expect(structure.IsHonorExistingResourcesEnabled()).Should(Equal(false))
-				Expect(structure.IsCustomizedInjectionsEnabled()).Should(Equal(false))
 				Expect(structure.IsResourcesNameEnabled()).Should(Equal(false))
 
 				Expect(structure.configuration[enableHugePageDownAPIKey].initial).Should(Equal(false))
 				Expect(structure.configuration[enableHonorExistingResourcesKey].initial).Should(Equal(false))
-				Expect(structure.configuration[enableCustomizedInjectionKey].initial).Should(Equal(false))
 			})
 
 			It("Map with correct key, with [features] inside, but features name are incorrect", func() {
@@ -339,20 +317,17 @@ var _ = Describe("Verify controlswitches package", func() {
 
 				Expect(structure.IsHugePagedownAPIEnabled()).Should(Equal(false))
 				Expect(structure.IsHonorExistingResourcesEnabled()).Should(Equal(false))
-				Expect(structure.IsCustomizedInjectionsEnabled()).Should(Equal(false))
 				Expect(structure.IsResourcesNameEnabled()).Should(Equal(false))
 
 				Expect(structure.configuration[enableHugePageDownAPIKey].initial).Should(Equal(false))
 				Expect(structure.configuration[enableHonorExistingResourcesKey].initial).Should(Equal(false))
-				Expect(structure.configuration[enableCustomizedInjectionKey].initial).Should(Equal(false))
 			})
 
 			It("Map with correct key, with [features] inside - but JSON is invalid", func() {
 				const value = `{
 							"features": {
 								"enableHugePageDownApi": false,
-								"enableHonorExistingResources": true,
-								"enableCustomizedInjection": false
+								"enableHonorExistingResources": true
 							},
 							"networkResourceNameKeys": ["k8s.v1.cni.cncf.io/resourceName", "k8s.v1.cni.cncf.io/bridgeName"],
 							"customInjection": {
@@ -374,20 +349,17 @@ var _ = Describe("Verify controlswitches package", func() {
 
 				Expect(structure.IsHugePagedownAPIEnabled()).Should(Equal(false))
 				Expect(structure.IsHonorExistingResourcesEnabled()).Should(Equal(false))
-				Expect(structure.IsCustomizedInjectionsEnabled()).Should(Equal(false))
 				Expect(structure.IsResourcesNameEnabled()).Should(Equal(false))
 
 				Expect(structure.configuration[enableHugePageDownAPIKey].initial).Should(Equal(false))
 				Expect(structure.configuration[enableHonorExistingResourcesKey].initial).Should(Equal(false))
-				Expect(structure.configuration[enableCustomizedInjectionKey].initial).Should(Equal(false))
 			})
 
 			It("Map with correct key, with [features] inside - all set to false", func() {
 				const value = `{
 							"features": {
 								"enableHugePageDownApi": false,
-								"enableHonorExistingResources": false,
-								"enableCustomizedInjection": false
+								"enableHonorExistingResources": false
 							},
 							"networkResourceNameKeys": ["k8s.v1.cni.cncf.io/resourceName", "k8s.v1.cni.cncf.io/bridgeName"],
 							"customInjection": {
@@ -409,12 +381,10 @@ var _ = Describe("Verify controlswitches package", func() {
 
 				Expect(structure.IsHugePagedownAPIEnabled()).Should(Equal(false))
 				Expect(structure.IsHonorExistingResourcesEnabled()).Should(Equal(false))
-				Expect(structure.IsCustomizedInjectionsEnabled()).Should(Equal(false))
 				Expect(structure.IsResourcesNameEnabled()).Should(Equal(false))
 
 				Expect(structure.configuration[enableHugePageDownAPIKey].initial).Should(Equal(false))
 				Expect(structure.configuration[enableHonorExistingResourcesKey].initial).Should(Equal(false))
-				Expect(structure.configuration[enableCustomizedInjectionKey].initial).Should(Equal(false))
 			})
 
 			// set one by one, instead of all in one
@@ -422,8 +392,7 @@ var _ = Describe("Verify controlswitches package", func() {
 				const value = `{
 							"features": {
 								"enableHugePageDownApi": true,
-								"enableHonorExistingResources": "isThisAnError",
-								"enableCustomizedInjection": true
+								"enableHonorExistingResources": "isThisAnError"
 							},
 							"networkResourceNameKeys": ["k8s.v1.cni.cncf.io/resourceName", "k8s.v1.cni.cncf.io/bridgeName"],
 							"customInjection": {
@@ -445,20 +414,17 @@ var _ = Describe("Verify controlswitches package", func() {
 
 				Expect(structure.IsHugePagedownAPIEnabled()).Should(Equal(false))
 				Expect(structure.IsHonorExistingResourcesEnabled()).Should(Equal(false))
-				Expect(structure.IsCustomizedInjectionsEnabled()).Should(Equal(false))
 				Expect(structure.IsResourcesNameEnabled()).Should(Equal(false))
 
 				Expect(structure.configuration[enableHugePageDownAPIKey].initial).Should(Equal(false))
 				Expect(structure.configuration[enableHonorExistingResourcesKey].initial).Should(Equal(false))
-				Expect(structure.configuration[enableCustomizedInjectionKey].initial).Should(Equal(false))
 			})
 
 			It("Map with correct key, with [features] inside - all set to true", func() {
 				const value = `{
 							"features": {
 								"enableHugePageDownApi": true,
-								"enableHonorExistingResources": true,
-								"enableCustomizedInjection": true
+								"enableHonorExistingResources": true
 							},
 							"networkResourceNameKeys": ["k8s.v1.cni.cncf.io/resourceName", "k8s.v1.cni.cncf.io/bridgeName"],
 							"customInjection": {
@@ -480,20 +446,17 @@ var _ = Describe("Verify controlswitches package", func() {
 
 				Expect(structure.IsHugePagedownAPIEnabled()).Should(Equal(true))
 				Expect(structure.IsHonorExistingResourcesEnabled()).Should(Equal(true))
-				Expect(structure.IsCustomizedInjectionsEnabled()).Should(Equal(true))
 				Expect(structure.IsResourcesNameEnabled()).Should(Equal(false))
 
 				Expect(structure.configuration[enableHugePageDownAPIKey].initial).Should(Equal(false))
 				Expect(structure.configuration[enableHonorExistingResourcesKey].initial).Should(Equal(false))
-				Expect(structure.configuration[enableCustomizedInjectionKey].initial).Should(Equal(false))
 			})
 
 			It("Map with correct key, with [features] inside - mix with values true / false", func() {
 				const value = `{
 							"features": {
 								"enableHugePageDownApi": true,
-								"enableHonorExistingResources": false,
-								"enableCustomizedInjection": true
+								"enableHonorExistingResources": false
 							},
 							"networkResourceNameKeys": ["k8s.v1.cni.cncf.io/resourceName", "k8s.v1.cni.cncf.io/bridgeName"],
 							"customInjection": {
@@ -515,12 +478,10 @@ var _ = Describe("Verify controlswitches package", func() {
 
 				Expect(structure.IsHugePagedownAPIEnabled()).Should(Equal(true))
 				Expect(structure.IsHonorExistingResourcesEnabled()).Should(Equal(false))
-				Expect(structure.IsCustomizedInjectionsEnabled()).Should(Equal(true))
 				Expect(structure.IsResourcesNameEnabled()).Should(Equal(false))
 
 				Expect(structure.configuration[enableHugePageDownAPIKey].initial).Should(Equal(false))
 				Expect(structure.configuration[enableHonorExistingResourcesKey].initial).Should(Equal(false))
-				Expect(structure.configuration[enableCustomizedInjectionKey].initial).Should(Equal(false))
 			})
 
 			It("Map with correct key, with [features] inside - some features are missing", func() {
@@ -540,12 +501,10 @@ var _ = Describe("Verify controlswitches package", func() {
 
 				Expect(structure.IsHugePagedownAPIEnabled()).Should(Equal(true))
 				Expect(structure.IsHonorExistingResourcesEnabled()).Should(Equal(false))
-				Expect(structure.IsCustomizedInjectionsEnabled()).Should(Equal(false))
 				Expect(structure.IsResourcesNameEnabled()).Should(Equal(false))
 
 				Expect(structure.configuration[enableHugePageDownAPIKey].initial).Should(Equal(false))
 				Expect(structure.configuration[enableHonorExistingResourcesKey].initial).Should(Equal(false))
-				Expect(structure.configuration[enableCustomizedInjectionKey].initial).Should(Equal(false))
 			})
 		})
 	})

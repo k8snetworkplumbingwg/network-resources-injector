@@ -208,17 +208,15 @@ func main() {
 			// has to be called each time because we need to restore default config when map is empty
 			controlSwitches.ProcessControlSwitchesConfigMap(cm)
 
-			if controlSwitches.IsCustomizedInjectionsEnabled() {
-				cm, err = clientset.CoreV1().ConfigMaps(namespace).Get(
-					context.Background(), userDefinedInjectionConfigMap, metav1.GetOptions{})
-				if err != nil {
-					if !errors.IsNotFound(err) {
-						glog.Warningf("Failed to get configmap for user-defined injections: %v", err)
-						continue
-					}
+			cm, err = clientset.CoreV1().ConfigMaps(namespace).Get(
+				context.Background(), userDefinedInjectionConfigMap, metav1.GetOptions{})
+			if err != nil {
+				if !errors.IsNotFound(err) {
+					glog.Warningf("Failed to get configmap for user-defined injections: %v", err)
+					continue
 				}
-				webhook.SetCustomizedInjections(cm)
 			}
+			webhook.SetCustomizedInjections(cm)
 		}
 	}
 

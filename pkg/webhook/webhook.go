@@ -685,10 +685,6 @@ func getResourceList(resourceRequests map[string]int64) *corev1.ResourceList {
 func createCustomizedPatch(pod corev1.Pod) ([]jsonPatchOperation, error) {
 	var userDefinedPatch []jsonPatchOperation
 
-	if !controlSwitches.IsCustomizedInjectionsEnabled() {
-		return userDefinedPatch, nil
-	}
-
 	// lock for reading
 	userDefinedInjects.Lock()
 	defer userDefinedInjects.Unlock()
@@ -976,10 +972,6 @@ func SetupInClusterClient() kubernetes.Interface {
 
 // SetCustomizedInjections sets additional injections to be applied in Pod spec
 func SetCustomizedInjections(injections *corev1.ConfigMap) {
-	if !controlSwitches.IsCustomizedInjectionsEnabled() {
-		return
-	}
-
 	// lock for writing
 	userDefinedInjects.Lock()
 	defer userDefinedInjects.Unlock()
