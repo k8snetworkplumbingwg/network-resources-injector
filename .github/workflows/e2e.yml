@@ -13,11 +13,8 @@ jobs:
       - name: Checkout code into the Go module directory
         uses: actions/checkout@v2
 
-      - name: Get tools
-        run: ./scripts/e2e_get_tools.sh
-
-      - name: Setup KinD cluster and setup test env
-        run: ./scripts/e2e_setup_cluster.sh
+      - name: Get tools, setup KinD cluster test environment
+        run: source scripts/e2e_get_tools.sh && ./scripts/e2e_setup_cluster.sh
 
       - name: Execute E2E tests
         run: go test -v ./test/e2e/...
