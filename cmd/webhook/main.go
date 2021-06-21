@@ -91,7 +91,7 @@ func main() {
 		glog.Fatalf("error in setting resource name keys: %s", err.Error())
 	}
 
-	//initiaze webhook with cache
+	//initialize webhook with cache
 	netAnnotationCache := netcache.Create()
 	netAnnotationCache.Start()
 	webhook.SetNetAttachDefCache(netAnnotationCache)

@@ -83,6 +83,7 @@ func (nc *NetAttachDefCache) Start() {
 		// informer Run blocks until informer is stopped
 		glog.Infof("starting net-attach-def informer")
 		informer.Run(nc.stopper)
+		glog.Infof("net-attach-def informer is stopped")
 		atomic.StoreInt32(&(nc.isRunning), int32(0))
 	}()
 }
@@ -90,17 +91,14 @@ func (nc *NetAttachDefCache) Start() {
 // Stop teardown the NetworkAttachmentDefinition informer
 func (nc *NetAttachDefCache) Stop() {
 	close(nc.stopper)
-	func(limit time.Duration) {
-		tEnd := time.Now().Add(limit)
-		for tEnd.After(time.Now()) {
-			if atomic.LoadInt32(&nc.isRunning) == 0 {
-				glog.Infof("net-attach-def informer is stopped")
-				return
-			}
-			time.Sleep(600 * time.Millisecond)
+	tEnd := time.Now().Add(3 * time.Second)
+	for tEnd.After(time.Now()) {
+		if atomic.LoadInt32(&nc.isRunning) == 0 {
+			glog.Infof("net-attach-def informer is no longer running, proceed to clean up nad cache")
+			break
 		}
-		glog.Infof("net-attach-def informer is not stopped yet, proceeding with cleaning up nad cache")
-	}(3 * time.Second)
+		time.Sleep(600 * time.Millisecond)
+	}
 	nc.networkAnnotationsMapMutex.Lock()
 	nc.networkAnnotationsMap = nil
 	nc.networkAnnotationsMapMutex.Unlock()
