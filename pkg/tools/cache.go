@@ -16,12 +16,13 @@ package cache
 
 import (
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/golang/glog"
 	cniv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	"github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/client/clientset/versioned"
 	"github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/client/informers/externalversions"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 )
@@ -30,22 +31,23 @@ type NetAttachDefCache struct {
 	networkAnnotationsMap      map[string]map[string]string
 	networkAnnotationsMapMutex *sync.Mutex
 	stopper                    chan struct{}
+	isRunning                  int32
 }
 
 type NetAttachDefCacheService interface {
 	Start()
 	Stop()
-	Get(string) map[string]string
+	Get(namespace string, networkName string) map[string]string
 }
 
 func Create() NetAttachDefCacheService {
 	return &NetAttachDefCache{make(map[string]map[string]string),
-		&sync.Mutex{}, make(chan struct{})}
+		&sync.Mutex{}, make(chan struct{}), 0}
 }
 
-// Start start the informer for NetworkAttachmentDefinition, upon events populate the cache
+// Start creates informer for NetworkAttachmentDefinition events and populate the local cache
 func (nc *NetAttachDefCache) Start() {
-	factory := externalversions.NewFilteredSharedInformerFactory(setupNetAttachDefClient(), 0, "", func(o *metav1.ListOptions) {})
+	factory := externalversions.NewSharedInformerFactoryWithOptions(setupNetAttachDefClient(), 0, externalversions.WithNamespace(""))
 	informer := factory.K8sCniCncfIo().V1().NetworkAttachmentDefinitions().Informer()
 	// mutex to serialize the events.
 	mutex := &sync.Mutex{}
@@ -55,55 +57,80 @@ func (nc *NetAttachDefCache) Start() {
 			mutex.Lock()
 			defer mutex.Unlock()
 			netAttachDef := obj.(*cniv1.NetworkAttachmentDefinition)
-			nc.put(netAttachDef.Namespace+"/"+netAttachDef.Name, netAttachDef.Annotations)
+			nc.put(netAttachDef.Namespace, netAttachDef.Name, netAttachDef.Annotations)
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
 			mutex.Lock()
 			defer mutex.Unlock()
 			oldNetAttachDef := oldObj.(*cniv1.NetworkAttachmentDefinition)
-			nc.remove(oldNetAttachDef.Namespace + "/" + oldNetAttachDef.Name)
 			newNetAttachDef := newObj.(*cniv1.NetworkAttachmentDefinition)
-			nc.put(newNetAttachDef.Namespace+"/"+newNetAttachDef.Name, newNetAttachDef.Annotations)
+			if oldNetAttachDef.GetResourceVersion() == newNetAttachDef.GetResourceVersion() {
+				glog.Infof("no change in net-attach-def %s, ignoring update event", nc.getKey(oldNetAttachDef.Namespace, newNetAttachDef.Name))
+				return
+			}
+			nc.remove(oldNetAttachDef.Namespace, oldNetAttachDef.Name)
+			nc.put(newNetAttachDef.Namespace, newNetAttachDef.Name, newNetAttachDef.Annotations)
 		},
 		DeleteFunc: func(obj interface{}) {
 			mutex.Lock()
 			defer mutex.Unlock()
 			netAttachDef := obj.(*cniv1.NetworkAttachmentDefinition)
-			nc.remove(netAttachDef.Namespace + "/" + netAttachDef.Name)
+			nc.remove(netAttachDef.Namespace, netAttachDef.Name)
 		},
 	})
-	go informer.Run(nc.stopper)
+	go func() {
+		atomic.StoreInt32(&(nc.isRunning), int32(1))
+		// informer Run blocks until informer is stopped
+		glog.Infof("starting net-attach-def informer")
+		informer.Run(nc.stopper)
+		atomic.StoreInt32(&(nc.isRunning), int32(0))
+	}()
 }
 
-// Stop stop the NetworkAttachmentDefinition informer
+// Stop teardown the NetworkAttachmentDefinition informer
 func (nc *NetAttachDefCache) Stop() {
 	close(nc.stopper)
+	func(limit time.Duration) {
+		tEnd := time.Now().Add(limit)
+		for tEnd.After(time.Now()) {
+			if atomic.LoadInt32(&nc.isRunning) == 0 {
+				glog.Infof("net-attach-def informer is stopped")
+				return
+			}
+			time.Sleep(600 * time.Millisecond)
+		}
+		glog.Infof("net-attach-def informer is not stopped yet, proceeding with cleaning up nad cache")
+	}(3 * time.Second)
 	nc.networkAnnotationsMapMutex.Lock()
 	nc.networkAnnotationsMap = nil
 	nc.networkAnnotationsMapMutex.Unlock()
 }
 
-func (nc *NetAttachDefCache) put(networkName string, annotations map[string]string) {
+func (nc *NetAttachDefCache) put(namespace, networkName string, annotations map[string]string) {
 	nc.networkAnnotationsMapMutex.Lock()
-	nc.networkAnnotationsMap[networkName] = annotations
+	nc.networkAnnotationsMap[nc.getKey(namespace, networkName)] = annotations
 	nc.networkAnnotationsMapMutex.Unlock()
 }
 
-// Get returns annotations map for the given network name, if it's not available
+// Get returns annotations map for the given namespace and network name, if it's not available
 // return nil
-func (nc *NetAttachDefCache) Get(networkName string) map[string]string {
+func (nc *NetAttachDefCache) Get(namespace, networkName string) map[string]string {
 	nc.networkAnnotationsMapMutex.Lock()
 	defer nc.networkAnnotationsMapMutex.Unlock()
-	if annotationsMap, exists := nc.networkAnnotationsMap[networkName]; exists {
+	if annotationsMap, exists := nc.networkAnnotationsMap[nc.getKey(namespace, networkName)]; exists {
 		return annotationsMap
 	}
 	return nil
 }
 
-func (nc *NetAttachDefCache) remove(networkName string) {
+func (nc *NetAttachDefCache) remove(namespace, networkName string) {
 	nc.networkAnnotationsMapMutex.Lock()
-	delete(nc.networkAnnotationsMap[networkName], networkName)
+	delete(nc.networkAnnotationsMap, nc.getKey(namespace, networkName))
 	nc.networkAnnotationsMapMutex.Unlock()
+}
+
+func (nc *NetAttachDefCache) getKey(namespace, networkName string) string {
+	return namespace + "/" + networkName
 }
 
 // setupNetAttachDefClient creates K8s client for net-attach-def crd

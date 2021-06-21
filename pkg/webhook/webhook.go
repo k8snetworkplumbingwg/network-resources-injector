@@ -369,8 +369,7 @@ func getNetworkAttachmentDefinition(namespace, name string) (*cniv1.NetworkAttac
 
 func parseNetworkAttachDefinition(net *multus.NetworkSelectionElement, reqs map[string]int64, nsMap map[string]string) (map[string]int64, map[string]string, error) {
 	/* for each network in annotation ask API server for network-attachment-definition */
-	var annotationsMap map[string]string
-	annotationsMap = nadCache.Get(net.Namespace + "/" + net.Name)
+	annotationsMap := nadCache.Get(net.Namespace, net.Name)
 	if annotationsMap == nil {
 		glog.Infof("cache entry not found, retrieving network attachment definition '%s/%s' from api server", net.Namespace, net.Name)
 		networkAttachmentDefinition, err := getNetworkAttachmentDefinition(net.Namespace, net.Name)
