@@ -15,8 +15,6 @@
 package controlswitches
 
 import (
-	"io/ioutil"
-	"log"
 	"testing"
 
 	. "github.com/onsi/ginkgo"
@@ -24,7 +22,6 @@ import (
 )
 
 func TestWebhook(t *testing.T) {
-	log.SetOutput(ioutil.Discard)
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Controlswitches Suite")
 }

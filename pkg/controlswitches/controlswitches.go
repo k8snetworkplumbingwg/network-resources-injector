@@ -163,9 +163,8 @@ func (switches *ControlSwitches) ProcessControlSwitchesConfigMap(controlSwitches
 	var err error
 	if v, fileExists := controlSwitchesCm.Data[controlSwitchesFileKey]; fileExists {
 		var obj map[string]json.RawMessage
-		err = json.Unmarshal([]byte(v), &obj)
 
-		if err != nil {
+		if err = json.Unmarshal([]byte(v), &obj); err != nil {
 			glog.Warningf("Error during json unmarshal %v", err)
 			switches.setAllFeaturesToInitialState()
 			return
@@ -173,9 +172,8 @@ func (switches *ControlSwitches) ProcessControlSwitchesConfigMap(controlSwitches
 
 		if controlSwitches, mainExists := obj[controlSwitchesMainKey]; mainExists {
 			var switchObj map[string]bool
-			err = json.Unmarshal(controlSwitches, &switchObj)
 
-			if err != nil {
+			if err = json.Unmarshal(controlSwitches, &switchObj); err != nil {
 				glog.Warningf("Unable to unmarshal [%s] from configmap, err: %v", controlSwitchesMainKey, err)
 				switches.setAllFeaturesToInitialState()
 				return
