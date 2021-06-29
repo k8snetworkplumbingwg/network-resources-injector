@@ -25,13 +25,13 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/golang/glog"
-	netcache "github.com/k8snetworkplumbingwg/network-resources-injector/pkg/tools"
-	"k8s.io/apimachinery/pkg/api/errors"
 
-	"github.com/k8snetworkplumbingwg/network-resources-injector/pkg/controlswitches"
-	"github.com/k8snetworkplumbingwg/network-resources-injector/pkg/webhook"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/k8snetworkplumbingwg/network-resources-injector/pkg/controlswitches"
+	netcache "github.com/k8snetworkplumbingwg/network-resources-injector/pkg/tools"
+	"github.com/k8snetworkplumbingwg/network-resources-injector/pkg/webhook"
 )
 
 const (
