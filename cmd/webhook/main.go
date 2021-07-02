@@ -25,37 +25,52 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/golang/glog"
-	netcache "github.com/k8snetworkplumbingwg/network-resources-injector/pkg/tools"
-	"github.com/k8snetworkplumbingwg/network-resources-injector/pkg/webhook"
+
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/k8snetworkplumbingwg/network-resources-injector/pkg/controlswitches"
+	netcache "github.com/k8snetworkplumbingwg/network-resources-injector/pkg/tools"
+	"github.com/k8snetworkplumbingwg/network-resources-injector/pkg/webhook"
 )
 
 const (
 	defaultClientCa               = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
 	userDefinedInjectionConfigMap = "nri-user-defined-injections"
+	controlSwitchesConfigMap      = "nri-control-switches"
 )
 
 func main() {
 	var namespace string
 	var clientCAPaths webhook.ClientCAFlags
+
 	/* load configuration */
 	port := flag.Int("port", 8443, "The port on which to serve.")
 	address := flag.String("bind-address", "0.0.0.0", "The IP address on which to listen for the --port port.")
 	cert := flag.String("tls-cert-file", "cert.pem", "File containing the default x509 Certificate for HTTPS.")
 	key := flag.String("tls-private-key-file", "key.pem", "File containing the default x509 private key matching --tls-cert-file.")
 	insecure := flag.Bool("insecure", false, "Disable adding client CA to server TLS endpoint --insecure")
-	injectHugepageDownApi := flag.Bool("injectHugepageDownApi", false, "Enable hugepage requests and limits into Downward API.")
 	flag.Var(&clientCAPaths, "client-ca", "File containing client CA. This flag is repeatable if more than one client CA needs to be added to server")
-	resourceNameKeys := flag.String("network-resource-name-keys", "k8s.v1.cni.cncf.io/resourceName", "comma separated resource name keys --network-resource-name-keys.")
-	resourcesHonorFlag := flag.Bool("honor-resources", false, "Honor the existing requested resources requests & limits --honor-resources")
+
+	// do initialization of control switches flags
+	controlSwitches := controlswitches.SetupControlSwitchesFlags()
+
+	// at the end when all flags are declared parse it
 	flag.Parse()
+
+	// initialize all control switches structures
+	controlSwitches.InitControlSwitches()
+	glog.Infof("controlSwitches: %+v", *controlSwitches)
 
 	if *port < 1024 || *port > 65535 {
 		glog.Fatalf("invalid port number. Choose between 1024 and 65535")
 	}
 
-	if *address == "" || *cert == "" || *key == "" || *resourceNameKeys == "" {
+	if !controlSwitches.IsResourcesNameEnabled() {
+		glog.Fatalf("Input argument for resourceName cannot be empty.")
+	}
+
+	if *address == "" || *cert == "" || *key == "" {
 		glog.Fatalf("input argument(s) not defined correctly")
 	}
 
@@ -82,14 +97,8 @@ func main() {
 	/* init API client */
 	clientset := webhook.SetupInClusterClient()
 
-	webhook.SetInjectHugepageDownApi(*injectHugepageDownApi)
-
-	webhook.SetHonorExistingResources(*resourcesHonorFlag)
-
-	err = webhook.SetResourceNameKeys(*resourceNameKeys)
-	if err != nil {
-		glog.Fatalf("error in setting resource name keys: %s", err.Error())
-	}
+	// initialize webhook with controlSwitches
+	webhook.SetControlSwitches(controlSwitches)
 
 	//initialize webhook with cache
 	netAnnotationCache := netcache.Create()
@@ -189,6 +198,17 @@ func main() {
 			glog.Infof("watcher error: %v", err)
 		case <-time.After(30 * time.Second):
 			cm, err := clientset.CoreV1().ConfigMaps(namespace).Get(
+				context.Background(), controlSwitchesConfigMap, metav1.GetOptions{})
+			if err != nil {
+				glog.Warningf("Error within control switches map %s", err.Error())
+				if !errors.IsNotFound(err) {
+					glog.Info("Map with runtime configuration not available using default / CLI settings")
+				}
+			}
+			// has to be called each time because we need to restore default config when map is empty
+			controlSwitches.ProcessControlSwitchesConfigMap(cm)
+
+			cm, err = clientset.CoreV1().ConfigMaps(namespace).Get(
 				context.Background(), userDefinedInjectionConfigMap, metav1.GetOptions{})
 			if err != nil {
 				if !errors.IsNotFound(err) {

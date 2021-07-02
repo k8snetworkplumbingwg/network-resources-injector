@@ -6,6 +6,7 @@
       * [Disable adding client CAs to server TLS endpoint](#disable-adding-client-cas-to-server-tls-endpoint)
       * [Client CAs](#client-cas)
    * [Additional features](#additional-features)
+      * [Features control switches](#features-control-switches)
       * [Expose Hugepages via Downward API](#expose-hugepages-via-downward-api)
       * [Node Selector](#node-selector)
       * [User Defined Injections](#user-defined-injections)
@@ -141,6 +142,44 @@ By default, we consume the client CA from the Kubernetes service account secrets
 If you wish to consume a client CA from a different location, please specify flag ```--client-ca``` with a valid path. If you wish to add more than one client CA, repeat this flag multiple times. If ```--client-ca``` is defined, the default client CA from the service account secrets directory will not be consumed.
 
 ## Additional features
+All additional Network Resource Injector features can be enabled by passing command line arguments to executable. It can be done by modification of arguments passed to webhook. Example yaml with deployment is here [server.yaml](deployments/server.yaml)
+
+Currently supported arguments are below. If needed, detailed description is available below in sub points. ConfigMap with runtime configuration is described below in point [Features control switches](#features-control-switches).
+
+|Argument|Default|Description|Can be set via ConfigMap|
+|---|---|---|---|
+|port|8443|The port on which to serve.|NO|
+|bind-address|0.0.0.0|The IP address on which to listen for the --port port.|NO|
+|tls-cert-file|cert.pem|File containing the default x509 Certificate for HTTPS.|NO|
+|tls-private-key-file|key.pem|File containing the default x509 private key matching --tls-cert-file.|NO|
+|insecure|false|Disable adding client CA to server TLS endpoint|NO|
+|client-ca|""|File containing client CA. This flag is repeatable if more than one client CA needs to be added to server|NO|
+|injectHugepageDownApi|false|Enable hugepage requests and limits into Downward API.|YES|
+|network-resource-name-keys|k8s.v1.cni.cncf.io/resourceName|comma separated resource name keys|YES|
+|honor-resources|false|Honor the existing requested resources requests & limits|YES|
+
+### Features control switches
+It is possible to control some features of Network Resource Injector with runtime configuration. NRI is watching for a ConfigMap with name **nri-control-switches** that should be available in the same namespace as NRI (default is kube-system). Below is example with full configuration that sets all features to disable state. Not all values have to be defined. User can toggle only one feature leaving others in default state. By default state, one should understand state set during webhook initialization. Could be a state set by CLI argument, default argument embedded in code or environment variable.
+
+```
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nri-control-switches
+  namespace: kube-system
+data:
+  config.json: |
+    {
+      "features": {
+        "enableHugePageDownApi": false,
+        "enableHonorExistingResources": false
+      }
+    }
+
+```
+
+Set feature state is available as long as ConfigMap exists. Webhook checks for map update every 30 seconds. Please keep in mind that runtime configuration settings override all other settings. They have the highest priority.
+
 ### Expose Hugepages via Downward API
 In Kubernetes 1.20, an alpha feature was added to expose the requested hugepages to the container via the Downward API.
 Being alpha, this feature is disabled in Kubernetes by default.
