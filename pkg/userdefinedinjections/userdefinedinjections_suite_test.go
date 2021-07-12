@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package controlswitches
+package userdefinedinjections
 
 import (
 	"testing"
@@ -21,7 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestControlSwitches(t *testing.T) {
+func TestUserDefinedInjections(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Controlswitches Suite")
+	RunSpecs(t, "UserDefinedInjections Suite")
 }
