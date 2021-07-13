@@ -21,7 +21,7 @@ import (
 	"net/http/httptest"
 
 	"gopkg.in/intel/multus-cni.v3/pkg/types"
-	"k8s.io/api/admission/v1beta1"
+	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -44,15 +44,15 @@ var _ = Describe("Webhook", func() {
 	Describe("Preparing Admission Review Response", func() {
 		Context("Admission Review Request is nil", func() {
 			It("should return error", func() {
-				ar := &v1beta1.AdmissionReview{}
+				ar := &admissionv1.AdmissionReview{}
 				ar.Request = nil
 				Expect(prepareAdmissionReviewResponse(false, "", ar)).To(HaveOccurred())
 			})
 		})
 		Context("Message is not empty", func() {
 			It("should set message in the response", func() {
-				ar := &v1beta1.AdmissionReview{}
-				ar.Request = &v1beta1.AdmissionRequest{
+				ar := &admissionv1.AdmissionReview{}
+				ar.Request = &admissionv1.AdmissionRequest{
 					UID: "fake-uid",
 				}
 				err := prepareAdmissionReviewResponse(false, "some message", ar)
@@ -75,8 +75,8 @@ var _ = Describe("Webhook", func() {
 	Describe("Deserializing Network Attachment Definition", func() {
 		Context("It's not an Network Attachment Definition", func() {
 			It("should return an error", func() {
-				ar := &v1beta1.AdmissionReview{}
-				ar.Request = &v1beta1.AdmissionRequest{}
+				ar := &admissionv1.AdmissionReview{}
+				ar.Request = &admissionv1.AdmissionRequest{}
 				_, err := deserializeNetworkAttachmentDefinition(ar)
 				Expect(err).To(HaveOccurred())
 			})
@@ -86,8 +86,8 @@ var _ = Describe("Webhook", func() {
 	Describe("Deserializing Pod", func() {
 		Context("It's not a Pod", func() {
 			It("should return an error", func() {
-				ar := &v1beta1.AdmissionReview{}
-				ar.Request = &v1beta1.AdmissionRequest{}
+				ar := &admissionv1.AdmissionReview{}
+				ar.Request = &admissionv1.AdmissionRequest{}
 				_, err := deserializePod(ar)
 				Expect(err).To(HaveOccurred())
 			})
@@ -98,8 +98,8 @@ var _ = Describe("Webhook", func() {
 		Context("with an AdmissionReview", func() {
 			It("should be marshalled and written to a HTTP Response Writer", func() {
 				w := httptest.NewRecorder()
-				ar := &v1beta1.AdmissionReview{}
-				ar.Response = &v1beta1.AdmissionResponse{
+				ar := &admissionv1.AdmissionReview{}
+				ar.Response = &admissionv1.AdmissionResponse{
 					UID:     "fake-uid",
 					Allowed: true,
 					Result: &metav1.Status{
