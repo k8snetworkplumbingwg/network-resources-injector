@@ -107,6 +107,19 @@ func createMutatingWebhookConfiguration(certificate []byte, failurePolicyStr str
 	}
 	sideEffects := arv1.SideEffectClassNone
 	path := "/mutate"
+	namespaces := []string{"kube-system"}
+	if namespace != "kube-system" {
+		namespaces = append(namespaces, namespace)
+	}
+	namespaceSelector := metav1.LabelSelector{
+		MatchExpressions: []metav1.LabelSelectorRequirement{
+			{
+				Key:      "kubernetes.io/metadata.name",
+				Operator: metav1.LabelSelectorOpNotIn,
+				Values:   namespaces,
+			},
+		},
+	}
 	configuration := &arv1.MutatingWebhookConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: configName,
@@ -128,6 +141,7 @@ func createMutatingWebhookConfiguration(certificate []byte, failurePolicyStr str
 				FailurePolicy:           &failurePolicy,
 				AdmissionReviewVersions: []string{"v1"},
 				SideEffects:             &sideEffects,
+				NamespaceSelector:       &namespaceSelector,
 				Rules: []arv1.RuleWithOperations{
 					arv1.RuleWithOperations{
 						Operations: []arv1.OperationType{arv1.Create},

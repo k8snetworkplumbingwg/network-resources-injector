@@ -14,6 +14,12 @@ webhooks:
         namespace: ${NAMESPACE}
         path: "/mutate"
       caBundle: ${CA_BUNDLE}
+    namespaceSelector:
+      matchExpressions:
+        - key: "kubernetes.io/metadata.name"
+          operator: "NotIn"
+          values:
+            - "kube-system"
     rules:
       - operations: [ "CREATE" ]
         apiGroups: ["apps", ""]
