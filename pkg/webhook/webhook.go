@@ -34,7 +34,7 @@ import (
 	"github.com/k8snetworkplumbingwg/network-resources-injector/pkg/controlswitches"
 	netcache "github.com/k8snetworkplumbingwg/network-resources-injector/pkg/tools"
 	"github.com/k8snetworkplumbingwg/network-resources-injector/pkg/types"
-	"k8s.io/api/admission/v1beta1"
+	admissionv1 "k8s.io/api/admission/v1"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -79,9 +79,9 @@ func SetControlSwitches(activeConfiguration *controlswitches.ControlSwitches) {
 	controlSwitches = activeConfiguration
 }
 
-func prepareAdmissionReviewResponse(allowed bool, message string, ar *v1beta1.AdmissionReview) error {
+func prepareAdmissionReviewResponse(allowed bool, message string, ar *admissionv1.AdmissionReview) error {
 	if ar.Request != nil {
-		ar.Response = &v1beta1.AdmissionResponse{
+		ar.Response = &admissionv1.AdmissionResponse{
 			UID:     ar.Request.UID,
 			Allowed: allowed,
 		}
@@ -95,7 +95,7 @@ func prepareAdmissionReviewResponse(allowed bool, message string, ar *v1beta1.Ad
 	return errors.New("received empty AdmissionReview request")
 }
 
-func readAdmissionReview(req *http.Request, w http.ResponseWriter) (*v1beta1.AdmissionReview, int, error) {
+func readAdmissionReview(req *http.Request, w http.ResponseWriter) (*admissionv1.AdmissionReview, int, error) {
 	var body []byte
 
 	if req.Body != nil {
@@ -130,8 +130,8 @@ func readAdmissionReview(req *http.Request, w http.ResponseWriter) (*v1beta1.Adm
 	return ar, http.StatusOK, nil
 }
 
-func deserializeAdmissionReview(body []byte) (*v1beta1.AdmissionReview, error) {
-	ar := &v1beta1.AdmissionReview{}
+func deserializeAdmissionReview(body []byte) (*admissionv1.AdmissionReview, error) {
+	ar := &admissionv1.AdmissionReview{}
 	runtimeScheme := runtime.NewScheme()
 	codecs := serializer.NewCodecFactory(runtimeScheme)
 	deserializer := codecs.UniversalDeserializer()
@@ -145,14 +145,14 @@ func deserializeAdmissionReview(body []byte) (*v1beta1.AdmissionReview, error) {
 	return ar, err
 }
 
-func deserializeNetworkAttachmentDefinition(ar *v1beta1.AdmissionReview) (cniv1.NetworkAttachmentDefinition, error) {
+func deserializeNetworkAttachmentDefinition(ar *admissionv1.AdmissionReview) (cniv1.NetworkAttachmentDefinition, error) {
 	/* unmarshal NetworkAttachmentDefinition from AdmissionReview request */
 	netAttachDef := cniv1.NetworkAttachmentDefinition{}
 	err := json.Unmarshal(ar.Request.Object.Raw, &netAttachDef)
 	return netAttachDef, err
 }
 
-func deserializePod(ar *v1beta1.AdmissionReview) (corev1.Pod, error) {
+func deserializePod(ar *admissionv1.AdmissionReview) (corev1.Pod, error) {
 	/* unmarshal Pod from AdmissionReview request */
 	pod := corev1.Pod{}
 	err := json.Unmarshal(ar.Request.Object.Raw, &pod)
@@ -415,7 +415,7 @@ func parseNetworkAttachDefinition(net *multus.NetworkSelectionElement, reqs map[
 	return reqs, nsMap, nil
 }
 
-func handleValidationError(w http.ResponseWriter, ar *v1beta1.AdmissionReview, orgErr error) {
+func handleValidationError(w http.ResponseWriter, ar *admissionv1.AdmissionReview, orgErr error) {
 	err := prepareAdmissionReviewResponse(false, orgErr.Error(), ar)
 	if err != nil {
 		err := errors.Wrap(err, "error preparing AdmissionResponse")
@@ -425,7 +425,7 @@ func handleValidationError(w http.ResponseWriter, ar *v1beta1.AdmissionReview, o
 	writeResponse(w, ar)
 }
 
-func writeResponse(w http.ResponseWriter, ar *v1beta1.AdmissionReview) {
+func writeResponse(w http.ResponseWriter, ar *admissionv1.AdmissionReview) {
 	glog.Infof("sending response to the Kubernetes API server")
 	resp, _ := json.Marshal(ar)
 	w.Write(resp)
@@ -932,8 +932,8 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 
 		patchBytes, _ := json.Marshal(patch)
 		ar.Response.Patch = patchBytes
-		ar.Response.PatchType = func() *v1beta1.PatchType {
-			pt := v1beta1.PatchTypeJSONPatch
+		ar.Response.PatchType = func() *admissionv1.PatchType {
+			pt := admissionv1.PatchTypeJSONPatch
 			return &pt
 		}()
 	} else {

@@ -158,6 +158,8 @@ Currently supported arguments are below. If needed, detailed description is avai
 |network-resource-name-keys|k8s.v1.cni.cncf.io/resourceName|comma separated resource name keys|YES|
 |honor-resources|false|Honor the existing requested resources requests & limits|YES|
 
+NOTE: Network Resource Injector would not mutate pods in kube-system namespace.
+
 ### Features control switches
 It is possible to control some features of Network Resource Injector with runtime configuration. NRI is watching for a ConfigMap with name **nri-control-switches** that should be available in the same namespace as NRI (default is kube-system). Below is example with full configuration that sets all features to disable state. Not all values have to be defined. User can toggle only one feature leaving others in default state. By default state, one should understand state set during webhook initialization. Could be a state set by CLI argument, default argument embedded in code or environment variable.
 
