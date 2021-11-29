@@ -18,13 +18,13 @@ var _ = Describe("Verify 'User Defined Injections'", func() {
 	var nad, nad2 *cniv1.NetworkAttachmentDefinition
 	var err error
 
-	Context("Positive use cases - expected that NRI will inject correctly custom definitions", func() {
+	Context("Positive use cases - expected that NRI will inject correctly user-defined-injections", func() {
 		BeforeEach(func() {
 			nad = util.GetResourceSelectorOnly(testNetworkName, *testNs, testNetworkResName)
 			err = util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)
 			Expect(err).Should(BeNil())
 
-			// second network attachment that is used by user custom injections
+			// second network attachment that is used by user user-defined-injections
 			nad2 = util.GetResourceSelectorOnly("sriov-net-attach-def", *testNs, "example.com/boo")
 			err = util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad2, timeout)
 			Expect(err).Should(BeNil())
@@ -297,7 +297,7 @@ var _ = Describe("Verify 'User Defined Injections'", func() {
 		})
 	})
 
-	Context("Negative use cases - expected that custom definition are not going to be injected", func() {
+	Context("Negative use cases - expected that user-defined-injections-injections are not going to be injected", func() {
 		BeforeEach(func() {
 			nad = util.GetResourceSelectorOnly(testNetworkName, *testNs, testNetworkResName)
 			err = util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)

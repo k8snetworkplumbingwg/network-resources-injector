@@ -4,11 +4,14 @@ jobs:
   e2e-test-cloud:
     name: E2E test cloud (GitHub VM)
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go-version: [1.13, 1.14, 1.15, 1.16, 1.17]
     steps:
       - name: Set up Go version
         uses: actions/setup-go@v1
         with:
-          go-version: 1.13
+          go-version: ${{ matrix.go-version }}
 
       - name: Checkout code into the Go module directory
         uses: actions/checkout@v2
