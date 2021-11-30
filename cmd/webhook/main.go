@@ -202,13 +202,13 @@ func main() {
 		case <-time.After(30 * time.Second):
 			cm, err := clientset.CoreV1().ConfigMaps(namespace).Get(
 				context.Background(), controlSwitchesConfigMap, metav1.GetOptions{})
-			if err != nil {
-				if !errors.IsNotFound(err) {
-					glog.Warningf("Error getting control switches configmap %s", err.Error())
-				}
+			// only in case of API errors report an error and do not restore default values
+			if err != nil && !errors.IsNotFound(err) {
+				glog.Warningf("Error getting control switches configmap %s", err.Error())
+				continue
 			}
 
-			// has to be called each time because we need to restore default config when map is empty
+			// to be called each time when map is present or not (in that case to restore default values)
 			controlSwitches.ProcessControlSwitchesConfigMap(cm)
 			userInjections.SetUserDefinedInjections(cm)
 		}
