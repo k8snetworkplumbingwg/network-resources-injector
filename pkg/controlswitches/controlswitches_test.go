@@ -263,7 +263,7 @@ var _ = Describe("Verify controlswitches package", func() {
 			It("Map with correct key, but without [features] inside", func() {
 				const value = `{
 							"networkResourceNameKeys": ["k8s.v1.cni.cncf.io/resourceName", "k8s.v1.cni.cncf.io/bridgeName"],
-							"customInjection": {
+							"user-defined-injections": {
 								"network-resource-injector-pod-annotation": {
 									"op": "add",
 								 	"path": "/metadata/annotations",
@@ -298,7 +298,7 @@ var _ = Describe("Verify controlswitches package", func() {
 								"enableResourceNa": false
 							},
 							"networkResourceNameKeys": ["k8s.v1.cni.cncf.io/resourceName", "k8s.v1.cni.cncf.io/bridgeName"],
-							"customInjection": {
+							"user-defined-injections": {
 								"network-resource-injector-pod-annotation": {
 									"op": "add",
 								 	"path": "/metadata/annotations",
@@ -330,7 +330,7 @@ var _ = Describe("Verify controlswitches package", func() {
 								"enableHonorExistingResources": true
 							},
 							"networkResourceNameKeys": ["k8s.v1.cni.cncf.io/resourceName", "k8s.v1.cni.cncf.io/bridgeName"],
-							"customInjection": {
+							"user-defined-injections": {
 								"network-resource-injector-pod-annotation": {
 									"op": "add",
 								 	"path": "/metadata/annotations"
@@ -362,7 +362,7 @@ var _ = Describe("Verify controlswitches package", func() {
 								"enableHonorExistingResources": false
 							},
 							"networkResourceNameKeys": ["k8s.v1.cni.cncf.io/resourceName", "k8s.v1.cni.cncf.io/bridgeName"],
-							"customInjection": {
+							"user-defined-injections": {
 								"network-resource-injector-pod-annotation": {
 									"op": "add",
 								 	"path": "/metadata/annotations",
@@ -395,7 +395,7 @@ var _ = Describe("Verify controlswitches package", func() {
 								"enableHonorExistingResources": "isThisAnError"
 							},
 							"networkResourceNameKeys": ["k8s.v1.cni.cncf.io/resourceName", "k8s.v1.cni.cncf.io/bridgeName"],
-							"customInjection": {
+							"user-defined-injections": {
 								"network-resource-injector-pod-annotation": {
 									"op": "add",
 								 	"path": "/metadata/annotations",
@@ -427,7 +427,7 @@ var _ = Describe("Verify controlswitches package", func() {
 								"enableHonorExistingResources": true
 							},
 							"networkResourceNameKeys": ["k8s.v1.cni.cncf.io/resourceName", "k8s.v1.cni.cncf.io/bridgeName"],
-							"customInjection": {
+							"user-defined-injections": {
 								"network-resource-injector-pod-annotation": {
 									"op": "add",
 								 	"path": "/metadata/annotations",
@@ -459,7 +459,7 @@ var _ = Describe("Verify controlswitches package", func() {
 								"enableHonorExistingResources": false
 							},
 							"networkResourceNameKeys": ["k8s.v1.cni.cncf.io/resourceName", "k8s.v1.cni.cncf.io/bridgeName"],
-							"customInjection": {
+							"user-defined-injections": {
 								"network-resource-injector-pod-annotation": {
 									"op": "add",
 								 	"path": "/metadata/annotations",
