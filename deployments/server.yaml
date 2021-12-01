@@ -20,6 +20,10 @@ metadata:
   name: network-resources-injector
   namespace: kube-system
 spec:
+  securityContext:
+    runAsUser: 10000
+    runAsGroup: 10000
+    runAsNonRoot: true
   serviceAccount: network-resources-injector-sa
   containers:
   - name: webhook-server
@@ -39,8 +43,6 @@ spec:
         fieldRef:
           fieldPath: metadata.namespace
     securityContext:
-      runAsUser: 10000
-      runAsGroup: 10000
       capabilities:
         drop:
           - ALL
@@ -66,13 +68,23 @@ spec:
     args:
     - -name=network-resources-injector
     - -namespace=kube-system
-    - -alsologtostderr
+    - -logtostderr
     securityContext:
-      runAsUser: 10000
-      runAsGroup: 10000
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop:
+          - ALL
     volumeMounts:
     - name: tls
       mountPath: /etc/tls
+    resources:
+      requests:
+        memory: "50Mi"
+        cpu: "250m"
+      limits:
+        memory: "200Mi"
+        cpu: "500m"
   volumes:
   - name: tls
     emptyDir: {}
