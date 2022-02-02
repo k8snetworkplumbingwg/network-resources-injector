@@ -31,13 +31,13 @@ import (
 
 	"github.com/k8snetworkplumbingwg/network-resources-injector/pkg/controlswitches"
 	netcache "github.com/k8snetworkplumbingwg/network-resources-injector/pkg/tools"
+	"github.com/k8snetworkplumbingwg/network-resources-injector/pkg/userdefinedinjections"
 	"github.com/k8snetworkplumbingwg/network-resources-injector/pkg/webhook"
 )
 
 const (
-	defaultClientCa               = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
-	userDefinedInjectionConfigMap = "nri-user-defined-injections"
-	controlSwitchesConfigMap      = "nri-control-switches"
+	defaultClientCa          = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+	controlSwitchesConfigMap = "nri-control-switches"
 )
 
 func main() {
@@ -104,6 +104,9 @@ func main() {
 	netAnnotationCache := netcache.Create()
 	netAnnotationCache.Start()
 	webhook.SetNetAttachDefCache(netAnnotationCache)
+
+	userInjections := userdefinedinjections.CreateUserInjectionsStructure()
+	webhook.SetUserInjectionStructure(userInjections)
 
 	go func() {
 		/* register handlers */
@@ -199,24 +202,15 @@ func main() {
 		case <-time.After(30 * time.Second):
 			cm, err := clientset.CoreV1().ConfigMaps(namespace).Get(
 				context.Background(), controlSwitchesConfigMap, metav1.GetOptions{})
-			if err != nil {
-				glog.Warningf("Error within control switches map %s", err.Error())
-				if !errors.IsNotFound(err) {
-					glog.Info("Map with runtime configuration not available using default / CLI settings")
-				}
+			// only in case of API errors report an error and do not restore default values
+			if err != nil && !errors.IsNotFound(err) {
+				glog.Warningf("Error getting control switches configmap %s", err.Error())
+				continue
 			}
-			// has to be called each time because we need to restore default config when map is empty
-			controlSwitches.ProcessControlSwitchesConfigMap(cm)
 
-			cm, err = clientset.CoreV1().ConfigMaps(namespace).Get(
-				context.Background(), userDefinedInjectionConfigMap, metav1.GetOptions{})
-			if err != nil {
-				if !errors.IsNotFound(err) {
-					glog.Warningf("Failed to get configmap for user-defined injections: %v", err)
-					continue
-				}
-			}
-			webhook.SetCustomizedInjections(cm)
+			// to be called each time when map is present or not (in that case to restore default values)
+			controlSwitches.ProcessControlSwitchesConfigMap(cm)
+			userInjections.SetUserDefinedInjections(cm)
 		}
 	}
 

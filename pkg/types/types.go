@@ -23,4 +23,12 @@ const (
 	Hugepages2MRequestPath = "hugepages_2M_request"
 	Hugepages1GLimitPath   = "hugepages_1G_limit"
 	Hugepages2MLimitPath   = "hugepages_2M_limit"
+	ConfigMapMainFileKey   = "config.json"
 )
+
+// JsonPatchOperation the JSON path operation
+type JsonPatchOperation struct {
+	Operation string      `json:"op"`
+	Path      string      `json:"path"`
+	Value     interface{} `json:"value,omitempty"`
+}
