@@ -30,7 +30,7 @@ func DeleteNamespace(ci coreclient.CoreV1Interface, name string, timeout time.Du
 
 	err := ci.Namespaces().Delete(ctx, name, metav1.DeleteOptions{})
 	if err == nil {
-		WaitForNamespaceDelete(ci, name, timeout, 10)
+		_ = WaitForNamespaceDelete(ci, name, timeout, 10)
 	}
 
 	return err

@@ -76,7 +76,7 @@ var _ = Describe("Network injection testing", func() {
 		})
 
 		AfterEach(func() {
-			util.DeletePod(cs.CoreV1Interface, pod, timeout)
+			_ = util.DeletePod(cs.CoreV1Interface, pod, timeout)
 			Expect(util.DeleteNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, testNetworkName, nad, timeout)).Should(BeNil())
 		})
 
@@ -105,8 +105,8 @@ var _ = Describe("Network injection testing", func() {
 		})
 
 		AfterEach(func() {
-			util.DeletePod(cs.CoreV1Interface, pod, timeout)
-			util.DeleteNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, testNetworkName, nad, timeout)
+			_ = util.DeletePod(cs.CoreV1Interface, pod, timeout)
+			_ = util.DeleteNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, testNetworkName, nad, timeout)
 		})
 
 		It("should have two limits injected", func() {

@@ -44,8 +44,8 @@ var _ = Describe("POD in default namespace with downwarAPI already defined", fun
 		})
 
 		AfterEach(func() {
-			util.DeletePod(cs.CoreV1Interface, pod, timeout)
-			util.DeleteNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, testNetworkName, nad, timeout)
+			_ = util.DeletePod(cs.CoreV1Interface, pod, timeout)
+			_ = util.DeleteNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, testNetworkName, nad, timeout)
 		})
 
 		It("POD have downwardAPI defined to /etc/podnetinfo, so the same name and folder as NRI is using", func() {
@@ -128,8 +128,8 @@ var _ = Describe("Expose hugepages via Downward API, POD in default namespace", 
 		})
 
 		AfterEach(func() {
-			util.DeletePod(cs.CoreV1Interface, pod, timeout)
-			util.DeleteNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, testNetworkName, nad, timeout)
+			_ = util.DeletePod(cs.CoreV1Interface, pod, timeout)
+			_ = util.DeleteNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, testNetworkName, nad, timeout)
 		})
 
 		It("POD without annotation about resourceName, hugepages limit and memory size are defined and are equal", func() {
@@ -285,8 +285,8 @@ var _ = Describe("Expose hugepages via Downward API, POD in default namespace", 
 		})
 
 		AfterEach(func() {
-			util.DeletePod(cs.CoreV1Interface, pod, timeout)
-			util.DeleteNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, testNetworkName, nad, timeout)
+			_ = util.DeletePod(cs.CoreV1Interface, pod, timeout)
+			_ = util.DeleteNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, testNetworkName, nad, timeout)
 		})
 
 		It("Same amounts in request and limits, use 1Gi and 2Mi hugepages", func() {
@@ -415,8 +415,8 @@ var _ = Describe("Expose hugepages via Downward API, POD in default namespace", 
 		})
 
 		AfterEach(func() {
-			util.DeletePod(cs.CoreV1Interface, pod, timeout)
-			util.DeleteNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, testNetworkName, nad, timeout)
+			_ = util.DeletePod(cs.CoreV1Interface, pod, timeout)
+			_ = util.DeleteNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, testNetworkName, nad, timeout)
 		})
 
 		It("Same amounts in request and limits, use 1Gi and 2Mi hugepages, only on first container", func() {
@@ -696,8 +696,8 @@ var _ = Describe("Expose hugepages via Downward API, POD in default namespace", 
 		})
 
 		AfterEach(func() {
-			util.DeletePod(cs.CoreV1Interface, pod, timeout)
-			util.DeleteNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, testNetworkName, nad, timeout)
+			_ = util.DeletePod(cs.CoreV1Interface, pod, timeout)
+			_ = util.DeleteNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, testNetworkName, nad, timeout)
 		})
 
 		It("POD without annotation about resourceName, hugepages limit and memory size are defined and are equal", func() {

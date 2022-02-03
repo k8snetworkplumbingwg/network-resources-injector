@@ -16,8 +16,8 @@ var _ = Describe("Node selector test", func() {
 
 	Context("Cluster node available, default namespace", func() {
 		AfterEach(func() {
-			util.DeleteNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, testNetworkName, nad, timeout)
-			util.DeletePod(cs.CoreV1Interface, pod, timeout)
+			_ = util.DeleteNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, testNetworkName, nad, timeout)
+			_ = util.DeletePod(cs.CoreV1Interface, pod, timeout)
 		})
 
 		It("POD assigned to correct cluster node, only node specified without resource name", func() {
@@ -57,8 +57,8 @@ var _ = Describe("Node selector test", func() {
 
 	Context("Cluster node not available, default namespace", func() {
 		AfterEach(func() {
-			util.DeleteNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, testNetworkName, nad, timeout)
-			util.DeletePod(cs.CoreV1Interface, pod, timeout)
+			_ = util.DeleteNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, testNetworkName, nad, timeout)
+			_ = util.DeletePod(cs.CoreV1Interface, pod, timeout)
 		})
 
 		It("POD in pending state, only node selector passed without resource name", func() {

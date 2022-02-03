@@ -74,12 +74,12 @@ var _ = Describe("Verify 'User Defined Injections'", func() {
 		})
 
 		AfterEach(func() {
-			util.DeletePod(cs.CoreV1Interface, pod, timeout)
-			util.DeleteNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, testNetworkName, nad, timeout)
-			util.DeleteNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, "sriov-net-attach-def", nad2, timeout)
+			_ = util.DeletePod(cs.CoreV1Interface, pod, timeout)
+			_ = util.DeleteNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, testNetworkName, nad, timeout)
+			_ = util.DeleteNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, "sriov-net-attach-def", nad2, timeout)
 
 			if nil != configMap {
-				util.DeleteConfigMap(cs.CoreV1Interface, configMap, timeout)
+				_ = util.DeleteConfigMap(cs.CoreV1Interface, configMap, timeout)
 				configMap = nil
 			}
 		})
@@ -197,7 +197,7 @@ var _ = Describe("Verify 'User Defined Injections'", func() {
 			Expect(pod.Annotations["k8s.v1.cni.cncf.io/networks"]).ShouldNot(ContainSubstring("foo-network"))
 
 			// update ConfigMap
-			util.DeleteConfigMap(cs.CoreV1Interface, configMap, timeout)
+			Expect(util.DeleteConfigMap(cs.CoreV1Interface, configMap, timeout)).Should(BeNil())
 			configMap = util.GetConfigMap("nri-control-switches", "kube-system")
 			configMap = util.AddData(configMap, "config.json", secondValue)
 			Expect(util.ApplyConfigMap(cs.CoreV1Interface, configMap, timeout)).Should(BeNil())
@@ -249,7 +249,7 @@ var _ = Describe("Verify 'User Defined Injections'", func() {
 			Expect(pod.Annotations["k8s.v1.cni.cncf.io/networks"]).Should(ContainSubstring("sriov-net-attach-def"))
 			Expect(pod.Annotations["k8s.v1.cni.cncf.io/networks"]).ShouldNot(ContainSubstring("foo-network"))
 
-			util.DeleteConfigMap(cs.CoreV1Interface, configMap, timeout)
+			Expect(util.DeleteConfigMap(cs.CoreV1Interface, configMap, timeout)).Should(BeNil())
 
 			// wait for configmap to be consumed by NRI, expected to see in logs something like
 			// webhook.go:920] Initializing user-defined injections with key: customInjection, value: {}
@@ -284,8 +284,8 @@ var _ = Describe("Verify 'User Defined Injections'", func() {
 			Expect(pod.Annotations["k8s.v1.cni.cncf.io/networks"]).ShouldNot(ContainSubstring("foo-network"))
 
 			// delete POD and remove map
-			util.DeletePod(cs.CoreV1Interface, pod, timeout)
-			util.DeleteConfigMap(cs.CoreV1Interface, configMap, timeout)
+			Expect(util.DeletePod(cs.CoreV1Interface, pod, timeout)).Should(BeNil())
+			Expect(util.DeleteConfigMap(cs.CoreV1Interface, configMap, timeout)).Should(BeNil())
 
 			// wait for configmap to be consumed by NRI
 			time.Sleep(60 * time.Second)
@@ -311,11 +311,11 @@ var _ = Describe("Verify 'User Defined Injections'", func() {
 		})
 
 		AfterEach(func() {
-			util.DeletePod(cs.CoreV1Interface, pod, timeout)
-			util.DeleteNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, testNetworkName, nad, timeout)
+			_ = util.DeletePod(cs.CoreV1Interface, pod, timeout)
+			_ = util.DeleteNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, testNetworkName, nad, timeout)
 
 			if nil != configMap {
-				util.DeleteConfigMap(cs.CoreV1Interface, configMap, timeout)
+				_ = util.DeleteConfigMap(cs.CoreV1Interface, configMap, timeout)
 				configMap = nil
 			}
 		})
