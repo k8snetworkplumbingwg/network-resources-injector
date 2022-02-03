@@ -22,14 +22,11 @@ var _ = Describe("Node selector test", func() {
 
 		It("POD assigned to correct cluster node, only node specified without resource name", func() {
 			nad = util.GetNodeSelectorOnly(testNetworkName, *testNs, "kubernetes.io/hostname=kind-worker2")
-			err = util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)
-
-			Expect(err).Should(BeNil())
+			Expect(util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)).Should(BeNil())
 
 			podName := defaultPodName + "-1"
 			pod = util.GetOneNetwork(testNetworkName, *testNs, podName)
-			err = util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)
-			Expect(err).Should(BeNil())
+			Expect(util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)).Should(BeNil())
 
 			pod, err = util.UpdatePodInfo(cs.CoreV1Interface, pod, timeout)
 			Expect(err).Should(BeNil())
@@ -42,13 +39,11 @@ var _ = Describe("Node selector test", func() {
 
 		It("POD assigned to correct cluster node, node specified with resource name", func() {
 			nad = util.GetResourceAndNodeSelector(testNetworkName, *testNs, "kubernetes.io/hostname=kind-worker2")
-			err = util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)
-			Expect(err).Should(BeNil())
+			Expect(util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)).Should(BeNil())
 
 			podName := defaultPodName + "-2"
 			pod = util.GetOneNetwork(testNetworkName, *testNs, podName)
-			err = util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)
-			Expect(err).Should(BeNil())
+			Expect(util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)).Should(BeNil())
 
 			pod, err = util.UpdatePodInfo(cs.CoreV1Interface, pod, timeout)
 			Expect(err).Should(BeNil())
@@ -68,13 +63,11 @@ var _ = Describe("Node selector test", func() {
 
 		It("POD in pending state, only node selector passed without resource name", func() {
 			nad = util.GetNodeSelectorOnly(testNetworkName, *testNs, "kubernetes.io/hostname=kind-worker15")
-			err = util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)
-			Expect(err).Should(BeNil())
+			Expect(util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)).Should(BeNil())
 
 			podName := defaultPodName + "-3"
 			pod = util.GetOneNetwork(testNetworkName, *testNs, podName)
 			err = util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)
-
 			Expect(err).ShouldNot(BeNil())
 			Expect(err.Error()).Should(HavePrefix("timed out waiting for the condition"))
 
@@ -87,13 +80,11 @@ var _ = Describe("Node selector test", func() {
 
 		It("POD in pending state, node selector and resource name in CRD", func() {
 			nad = util.GetResourceAndNodeSelector(testNetworkName, *testNs, "kubernetes.io/hostname=kind-worker10")
-			err = util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)
-			Expect(err).Should(BeNil())
+			Expect(util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)).Should(BeNil())
 
 			podName := defaultPodName + "-4"
 			pod = util.GetOneNetwork(testNetworkName, *testNs, podName)
 			err = util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)
-
 			Expect(err).ShouldNot(BeNil())
 			Expect(err.Error()).Should(HavePrefix("timed out waiting for the condition"))
 
@@ -110,24 +101,20 @@ var _ = Describe("Node selector test", func() {
 
 		BeforeEach(func() {
 			testNamespace = "mysterious"
-			err = util.CreateNamespace(cs.CoreV1Interface, testNamespace, timeout)
-			Expect(err).Should(BeNil())
+			Expect(util.CreateNamespace(cs.CoreV1Interface, testNamespace, timeout)).Should(BeNil())
 		})
 
 		AfterEach(func() {
-			err = util.DeleteNamespace(cs.CoreV1Interface, testNamespace, timeout)
-			Expect(err).Should(BeNil())
+			Expect(util.DeleteNamespace(cs.CoreV1Interface, testNamespace, timeout)).Should(BeNil())
 		})
 
 		It("POD assigned to correct cluster node, only node specified without resource name", func() {
 			nad = util.GetNodeSelectorOnly(testNetworkName, testNamespace, "kubernetes.io/hostname=kind-worker2")
-			err = util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)
-			Expect(err).Should(BeNil())
+			Expect(util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)).Should(BeNil())
 
 			podName := defaultPodName + "-5"
 			pod = util.GetOneNetwork(testNetworkName, testNamespace, podName)
-			err = util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)
-			Expect(err).Should(BeNil())
+			Expect(util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)).Should(BeNil())
 
 			pod, err = util.UpdatePodInfo(cs.CoreV1Interface, pod, timeout)
 			Expect(err).Should(BeNil())
@@ -140,13 +127,11 @@ var _ = Describe("Node selector test", func() {
 
 		It("POD assigned to correct cluster node, node specified with resource name", func() {
 			nad = util.GetResourceAndNodeSelector(testNetworkName, testNamespace, "kubernetes.io/hostname=kind-worker2")
-			err = util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)
-			Expect(err).Should(BeNil())
+			Expect(util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)).Should(BeNil())
 
 			podName := defaultPodName + "-6"
 			pod = util.GetOneNetwork(testNetworkName, testNamespace, podName)
-			err = util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)
-			Expect(err).Should(BeNil())
+			Expect(util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)).Should(BeNil())
 
 			pod, err = util.UpdatePodInfo(cs.CoreV1Interface, pod, timeout)
 			Expect(err).Should(BeNil())

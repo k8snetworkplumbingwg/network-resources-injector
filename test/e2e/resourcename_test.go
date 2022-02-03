@@ -24,44 +24,36 @@ var _ = Describe("Verify that resource and POD which consumes resource cannot be
 
 		It("Correct network name in CRD, but the namespace if different than in POD specification", func() {
 			testNamespace := "mysterious"
-			err = util.CreateNamespace(cs.CoreV1Interface, testNamespace, timeout)
-			Expect(err).Should(BeNil())
+			Expect(util.CreateNamespace(cs.CoreV1Interface, testNamespace, timeout)).Should(BeNil())
 
 			nad = util.GetResourceSelectorOnly(testNetworkName, testNamespace, testNetworkResName)
-			err = util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)
-			Expect(err).Should(BeNil())
+			Expect(util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)).Should(BeNil())
 
 			pod = util.GetOneNetwork(testNetworkName, *testNs, defaultPodName)
 			err = util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)
 			Expect(err).ShouldNot(BeNil())
 			Expect(err.Error()).Should(ContainSubstring("could not get Network Attachment Definition default/foo-network"))
 
-			err = util.DeleteNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, testNetworkName, nad, timeout)
-			Expect(err).Should(BeNil())
+			Expect(util.DeleteNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, testNetworkName, nad, timeout)).Should(BeNil())
 
-			err = util.DeleteNamespace(cs.CoreV1Interface, testNamespace, timeout)
-			Expect(err).Should(BeNil())
+			Expect(util.DeleteNamespace(cs.CoreV1Interface, testNamespace, timeout)).Should(BeNil())
 		})
 
 		It("CRD in default namespace, and POD in custom namespace", func() {
 			testNamespace := "mysterious"
-			err = util.CreateNamespace(cs.CoreV1Interface, testNamespace, timeout)
-			Expect(err).Should(BeNil())
+			Expect(util.CreateNamespace(cs.CoreV1Interface, testNamespace, timeout)).Should(BeNil())
 
 			nad = util.GetResourceSelectorOnly(testNetworkName, *testNs, testNetworkResName)
-			err = util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)
-			Expect(err).Should(BeNil())
+			Expect(util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)).Should(BeNil())
 
 			pod = util.GetOneNetwork(testNetworkName, testNamespace, defaultPodName)
 			err = util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)
 			Expect(err).ShouldNot(BeNil())
 			Expect(err.Error()).Should(ContainSubstring("could not get Network Attachment Definition mysterious/foo-network"))
 
-			err = util.DeleteNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, testNetworkName, nad, timeout)
-			Expect(err).Should(BeNil())
+			Expect(util.DeleteNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, testNetworkName, nad, timeout)).Should(BeNil())
 
-			err = util.DeleteNamespace(cs.CoreV1Interface, testNamespace, timeout)
-			Expect(err).Should(BeNil())
+			Expect(util.DeleteNamespace(cs.CoreV1Interface, testNamespace, timeout)).Should(BeNil())
 		})
 	})
 })
@@ -74,12 +66,10 @@ var _ = Describe("Network injection testing", func() {
 	Context("one network request in default namespace", func() {
 		BeforeEach(func() {
 			nad = util.GetResourceSelectorOnly(testNetworkName, *testNs, testNetworkResName)
-			err = util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)
-			Expect(err).Should(BeNil())
+			Expect(util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)).Should(BeNil())
 
 			pod = util.GetOneNetwork(testNetworkName, *testNs, defaultPodName)
-			err = util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)
-			Expect(err).Should(BeNil())
+			Expect(util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)).Should(BeNil())
 			Expect(pod.Name).ShouldNot(BeNil())
 			pod, err = util.UpdatePodInfo(cs.CoreV1Interface, pod, timeout)
 			Expect(err).Should(BeNil())
@@ -87,8 +77,7 @@ var _ = Describe("Network injection testing", func() {
 
 		AfterEach(func() {
 			util.DeletePod(cs.CoreV1Interface, pod, timeout)
-			err = util.DeleteNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, testNetworkName, nad, timeout)
-			Expect(err).Should(BeNil())
+			Expect(util.DeleteNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, testNetworkName, nad, timeout)).Should(BeNil())
 		})
 
 		It("should have one limit injected", func() {
@@ -107,13 +96,12 @@ var _ = Describe("Network injection testing", func() {
 	Context("two network requests in default namespace", func() {
 		BeforeEach(func() {
 			nad = util.GetResourceSelectorOnly(testNetworkName, *testNs, testNetworkResName)
-			err = util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)
-			Expect(err).Should(BeNil())
+			Expect(util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)).Should(BeNil())
 
 			pod = util.GetMultiNetworks([]string{testNetworkName, testNetworkName}, *testNs, defaultPodName)
-			err = util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)
-			Expect(err).Should(BeNil())
+			Expect(util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)).Should(BeNil())
 			pod, err = util.UpdatePodInfo(cs.CoreV1Interface, pod, timeout)
+			Expect(err).Should(BeNil())
 		})
 
 		AfterEach(func() {
@@ -137,16 +125,13 @@ var _ = Describe("Network injection testing", func() {
 	Context("one network request in custom namespace", func() {
 		BeforeEach(func() {
 			testNamespace := "mysterious"
-			err = util.CreateNamespace(cs.CoreV1Interface, testNamespace, timeout)
-			Expect(err).Should(BeNil())
+			Expect(util.CreateNamespace(cs.CoreV1Interface, testNamespace, timeout)).Should(BeNil())
 
 			nad = util.GetResourceSelectorOnly(testNetworkName, testNamespace, testNetworkResName)
-			err = util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)
-			Expect(err).Should(BeNil())
+			Expect(util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)).Should(BeNil())
 
 			pod = util.GetOneNetwork(testNetworkName, testNamespace, defaultPodName)
-			err = util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)
-			Expect(err).Should(BeNil())
+			Expect(util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)).Should(BeNil())
 			Expect(pod.Name).ShouldNot(BeNil())
 			pod, err = util.UpdatePodInfo(cs.CoreV1Interface, pod, timeout)
 			Expect(err).Should(BeNil())
@@ -154,8 +139,7 @@ var _ = Describe("Network injection testing", func() {
 
 		AfterEach(func() {
 			testNamespace := "mysterious"
-			err = util.DeleteNamespace(cs.CoreV1Interface, testNamespace, timeout)
-			Expect(err).Should(BeNil())
+			Expect(util.DeleteNamespace(cs.CoreV1Interface, testNamespace, timeout)).Should(BeNil())
 		})
 
 		It("should have one limit injected", func() {

@@ -36,8 +36,7 @@ var _ = Describe("POD in default namespace with downwarAPI already defined", fun
 			stderrString = ""
 
 			nad = util.GetResourceSelectorOnly(testNetworkName, *testNs, testNetworkResName)
-			err = util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)
-			Expect(err).Should(BeNil())
+			Expect(util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)).Should(BeNil())
 
 			pod = util.GetOneNetwork(testNetworkName, *testNs, defaultPodName)
 			pod = util.AddToPodDefinitionHugePages1Gi(pod, 2, 2, 0)
@@ -135,15 +134,13 @@ var _ = Describe("Expose hugepages via Downward API, POD in default namespace", 
 
 		It("POD without annotation about resourceName, hugepages limit and memory size are defined and are equal", func() {
 			nad = util.GetWithoutAnnotations(testNetworkName, *testNs)
-			err = util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)
-			Expect(err).Should(BeNil())
+			Expect(util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)).Should(BeNil())
 
 			pod = util.GetOneNetwork(testNetworkName, *testNs, defaultPodName)
 			pod = util.AddToPodDefinitionHugePages1Gi(pod, 2, 2, 0)
 			pod = util.AddToPodDefinitionMemory(pod, 2, 2, 0)
 
-			err = util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)
-			Expect(err).Should(BeNil())
+			Expect(util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)).Should(BeNil())
 			Expect(pod.Name).ShouldNot(BeNil())
 
 			// Check new environment variable
@@ -162,15 +159,13 @@ var _ = Describe("Expose hugepages via Downward API, POD in default namespace", 
 
 		It("POD with annotation about resourceName, hugepages1Gi limit and memory size are defined and are equal", func() {
 			nad = util.GetResourceSelectorOnly(testNetworkName, *testNs, testNetworkResName)
-			err = util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)
-			Expect(err).Should(BeNil())
+			Expect(util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)).Should(BeNil())
 
 			pod = util.GetOneNetwork(testNetworkName, *testNs, defaultPodName)
 			pod = util.AddToPodDefinitionHugePages1Gi(pod, 2, 2, 0)
 			pod = util.AddToPodDefinitionMemory(pod, 2, 2, 0)
 
-			err = util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)
-			Expect(err).Should(BeNil())
+			Expect(util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)).Should(BeNil())
 			Expect(pod.Name).ShouldNot(BeNil())
 
 			// Check new environment variable
@@ -204,15 +199,13 @@ var _ = Describe("Expose hugepages via Downward API, POD in default namespace", 
 
 		It("POD with annotation about resourceName, hugepages 2Mi limit and memory size are defined and are equal", func() {
 			nad = util.GetResourceSelectorOnly(testNetworkName, *testNs, testNetworkResName)
-			err = util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)
-			Expect(err).Should(BeNil())
+			Expect(util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)).Should(BeNil())
 
 			pod = util.GetOneNetwork(testNetworkName, *testNs, defaultPodName)
 			pod = util.AddToPodDefinitionHugePages2Mi(pod, 1000, 1000, 0)
 			pod = util.AddToPodDefinitionMemory(pod, 2, 2, 0)
 
-			err = util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)
-			Expect(err).Should(BeNil())
+			Expect(util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)).Should(BeNil())
 			Expect(pod.Name).ShouldNot(BeNil())
 
 			// Check new environment variable
@@ -246,15 +239,13 @@ var _ = Describe("Expose hugepages via Downward API, POD in default namespace", 
 
 		It("POD with annotation about resourceName, hugepages 1Gi limit and cpu request are defined", func() {
 			nad = util.GetResourceSelectorOnly(testNetworkName, *testNs, testNetworkResName)
-			err = util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)
-			Expect(err).Should(BeNil())
+			Expect(util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)).Should(BeNil())
 
 			pod = util.GetOneNetwork(testNetworkName, *testNs, defaultPodName)
 			pod = util.AddToPodDefinitionHugePages1Gi(pod, 2, 2, 0)
 			pod = util.AddToPodDefinitionCpuLimits(pod, 4, 0)
 
-			err = util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)
-			Expect(err).Should(BeNil())
+			Expect(util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)).Should(BeNil())
 			Expect(pod.Name).ShouldNot(BeNil())
 
 			// Check new environment variable
@@ -300,16 +291,14 @@ var _ = Describe("Expose hugepages via Downward API, POD in default namespace", 
 
 		It("Same amounts in request and limits, use 1Gi and 2Mi hugepages", func() {
 			nad = util.GetResourceSelectorOnly(testNetworkName, *testNs, testNetworkResName)
-			err = util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)
-			Expect(err).Should(BeNil())
+			Expect(util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)).Should(BeNil())
 
 			pod = util.GetOneNetwork(testNetworkName, *testNs, defaultPodName)
 			pod = util.AddToPodDefinitionHugePages1Gi(pod, 2, 2, 0)
 			pod = util.AddToPodDefinitionHugePages2Mi(pod, 1000, 1000, 0)
 			pod = util.AddToPodDefinitionMemory(pod, 2, 2, 0)
 
-			err = util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)
-			Expect(err).Should(BeNil())
+			Expect(util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)).Should(BeNil())
 			Expect(pod.Name).ShouldNot(BeNil())
 
 			// Check new environment variable
@@ -361,16 +350,14 @@ var _ = Describe("Expose hugepages via Downward API, POD in default namespace", 
 
 		It("Different amounts in request and limits, use 1Gi and 2Mi hugepages", func() {
 			nad = util.GetResourceSelectorOnly(testNetworkName, *testNs, testNetworkResName)
-			err = util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)
-			Expect(err).Should(BeNil())
+			Expect(util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)).Should(BeNil())
 
 			pod = util.GetOneNetwork(testNetworkName, *testNs, defaultPodName)
 			pod = util.AddToPodDefinitionHugePages1Gi(pod, 1, 1, 0)
 			pod = util.AddToPodDefinitionHugePages2Mi(pod, 250, 250, 0)
 			pod = util.AddToPodDefinitionMemory(pod, 2, 2, 0)
 
-			err = util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)
-			Expect(err).Should(BeNil())
+			Expect(util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)).Should(BeNil())
 			Expect(pod.Name).ShouldNot(BeNil())
 
 			// Check new environment variable
@@ -434,16 +421,14 @@ var _ = Describe("Expose hugepages via Downward API, POD in default namespace", 
 
 		It("Same amounts in request and limits, use 1Gi and 2Mi hugepages, only on first container", func() {
 			nad = util.GetResourceSelectorOnly(testNetworkName, *testNs, testNetworkResName)
-			err = util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)
-			Expect(err).Should(BeNil())
+			Expect(util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)).Should(BeNil())
 
 			pod = util.GetOneNetworkTwoContainers(testNetworkName, *testNs, defaultPodName, pod2ndContainerName)
 			pod = util.AddToPodDefinitionHugePages1Gi(pod, 2, 2, 0)
 			pod = util.AddToPodDefinitionHugePages2Mi(pod, 1000, 1000, 0)
 			pod = util.AddToPodDefinitionMemory(pod, 2, 2, 0)
 
-			err = util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)
-			Expect(err).Should(BeNil())
+			Expect(util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)).Should(BeNil())
 			Expect(pod.Name).ShouldNot(BeNil())
 
 			// Check new environment variable
@@ -508,16 +493,14 @@ var _ = Describe("Expose hugepages via Downward API, POD in default namespace", 
 
 		It("Same amounts in request and limits, use 1Gi and 2Mi hugepages, only on second container", func() {
 			nad = util.GetResourceSelectorOnly(testNetworkName, *testNs, testNetworkResName)
-			err = util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)
-			Expect(err).Should(BeNil())
+			Expect(util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)).Should(BeNil())
 
 			pod = util.GetOneNetworkTwoContainers(testNetworkName, *testNs, defaultPodName, pod2ndContainerName)
 			pod = util.AddToPodDefinitionHugePages1Gi(pod, 2, 2, 1)
 			pod = util.AddToPodDefinitionHugePages2Mi(pod, 1000, 1000, 1)
 			pod = util.AddToPodDefinitionMemory(pod, 2, 2, 1)
 
-			err = util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)
-			Expect(err).Should(BeNil())
+			Expect(util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)).Should(BeNil())
 			Expect(pod.Name).ShouldNot(BeNil())
 
 			// Check new environment variable
@@ -590,8 +573,7 @@ var _ = Describe("Expose hugepages via Downward API, POD in default namespace", 
 
 		It("Same amounts in request and limits, use 1Gi and 2Mi hugepages, on both container", func() {
 			nad = util.GetResourceSelectorOnly(testNetworkName, *testNs, testNetworkResName)
-			err = util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)
-			Expect(err).Should(BeNil())
+			Expect(util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)).Should(BeNil())
 
 			pod = util.GetOneNetworkTwoContainers(testNetworkName, *testNs, defaultPodName, pod2ndContainerName)
 			// add hugepages to first container
@@ -603,8 +585,7 @@ var _ = Describe("Expose hugepages via Downward API, POD in default namespace", 
 			pod = util.AddToPodDefinitionHugePages2Mi(pod, 1000, 1000, 1)
 			pod = util.AddToPodDefinitionMemory(pod, 2, 2, 1)
 
-			err = util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)
-			Expect(err).Should(BeNil())
+			Expect(util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)).Should(BeNil())
 			Expect(pod.Name).ShouldNot(BeNil())
 
 			// Check new environment variable
@@ -721,15 +702,13 @@ var _ = Describe("Expose hugepages via Downward API, POD in default namespace", 
 
 		It("POD without annotation about resourceName, hugepages limit and memory size are defined and are equal", func() {
 			nad = util.GetWithoutAnnotations(testNetworkName, *testNs)
-			err = util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)
-			Expect(err).Should(BeNil())
+			Expect(util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)).Should(BeNil())
 
 			pod = util.GetOneNetwork(testNetworkName, *testNs, defaultPodName)
 			pod = util.AddToPodDefinitionHugePages1Gi(pod, 0, 0, 0)
 			pod = util.AddToPodDefinitionMemory(pod, 0, 0, 0)
 
-			err = util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)
-			Expect(err).Should(BeNil())
+			Expect(util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)).Should(BeNil())
 			Expect(pod.Name).ShouldNot(BeNil())
 
 			// Check new environment variable
@@ -749,15 +728,13 @@ var _ = Describe("Expose hugepages via Downward API, POD in default namespace", 
 
 		It("POD with annotation about resourceName, hugepages limit and memory size are defined and are equal", func() {
 			nad = util.GetResourceSelectorOnly(testNetworkName, *testNs, testNetworkResName)
-			err = util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)
-			Expect(err).Should(BeNil())
+			Expect(util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)).Should(BeNil())
 
 			pod = util.GetOneNetwork(testNetworkName, *testNs, defaultPodName)
 			pod = util.AddToPodDefinitionHugePages1Gi(pod, 0, 0, 0)
 			pod = util.AddToPodDefinitionMemory(pod, 0, 0, 0)
 
-			err = util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)
-			Expect(err).Should(BeNil())
+			Expect(util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)).Should(BeNil())
 			Expect(pod.Name).ShouldNot(BeNil())
 
 			// Check new environment variable
@@ -776,15 +753,13 @@ var _ = Describe("Expose hugepages via Downward API, POD in default namespace", 
 
 		It("POD with annotation about resourceName, hugepages limit and memory size are defined and are equal", func() {
 			nad = util.GetResourceSelectorOnly(testNetworkName, *testNs, testNetworkResName)
-			err = util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)
-			Expect(err).Should(BeNil())
+			Expect(util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)).Should(BeNil())
 
 			pod = util.GetOneNetwork(testNetworkName, *testNs, defaultPodName)
 			pod = util.AddToPodDefinitionHugePages2Mi(pod, 0, 0, 0)
 			pod = util.AddToPodDefinitionMemory(pod, 0, 0, 0)
 
-			err = util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)
-			Expect(err).Should(BeNil())
+			Expect(util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)).Should(BeNil())
 			Expect(pod.Name).ShouldNot(BeNil())
 
 			// Check new environment variable
@@ -803,15 +778,13 @@ var _ = Describe("Expose hugepages via Downward API, POD in default namespace", 
 
 		It("POD with annotation about resourceName, hugepages limit and cpu request are defined", func() {
 			nad = util.GetResourceSelectorOnly(testNetworkName, *testNs, testNetworkResName)
-			err = util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)
-			Expect(err).Should(BeNil())
+			Expect(util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)).Should(BeNil())
 
 			pod = util.GetOneNetwork(testNetworkName, *testNs, defaultPodName)
 			pod = util.AddToPodDefinitionHugePages1Gi(pod, 0, 0, 0)
 			pod = util.AddToPodDefinitionCpuLimits(pod, 1, 0)
 
-			err = util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)
-			Expect(err).Should(BeNil())
+			Expect(util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)).Should(BeNil())
 			Expect(pod.Name).ShouldNot(BeNil())
 
 			// Check new environment variable

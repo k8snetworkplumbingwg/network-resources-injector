@@ -8,3 +8,4 @@ tmp_dir="${root}/test/tmp"
 
 echo "removing '${tmp_dir}' and '${root}/bin'"
 rm -rf --preserve-root "${tmp_dir:?}" "${root:?}bin"
+rm -f "${root}/deployments/server_huge.yaml"

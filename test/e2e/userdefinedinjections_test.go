@@ -13,21 +13,64 @@ import (
 )
 
 var _ = Describe("Verify 'User Defined Injections'", func() {
+	const value = `{
+		"user-defined-injections": {
+			"customInjection": {
+				"op": "add",
+				"path": "/metadata/annotations",
+				"value": {
+						"k8s.v1.cni.cncf.io/networks": "sriov-net-attach-def"
+				}
+			}
+		}
+	}
+	`
+
 	var pod, pod2 *corev1.Pod
 	var configMap *corev1.ConfigMap
 	var nad, nad2 *cniv1.NetworkAttachmentDefinition
 	var err error
 
 	Context("Positive use cases - expected that NRI will inject correctly user-defined-injections", func() {
+		const secondValue = `{
+			"user-defined-injections": {
+				"secondInjection": {
+					"op": "add",
+					"path": "/metadata/annotations",
+					"value": {
+							"top-secret": "password"
+					}
+				}
+			}
+		}
+		`
+		const mergeValueAndSecond = `{
+			"user-defined-injections": {
+				"customInjection": {
+					"op": "add",
+					"path": "/metadata/annotations",
+					"value": {
+							"k8s.v1.cni.cncf.io/networks": "sriov-net-attach-def"
+					}
+				},
+				"secondInjection": {
+					"op": "add",
+					"path": "/metadata/annotations",
+					"value": {
+							"top-secret": "password"
+					}
+				}
+			}
+		}
+		`
+
 		BeforeEach(func() {
 			nad = util.GetResourceSelectorOnly(testNetworkName, *testNs, testNetworkResName)
-			err = util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)
-			Expect(err).Should(BeNil())
+			Expect(util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)).Should(BeNil())
 
 			// second network attachment that is used by user user-defined-injections
 			nad2 = util.GetResourceSelectorOnly("sriov-net-attach-def", *testNs, "example.com/boo")
-			err = util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad2, timeout)
-			Expect(err).Should(BeNil())
+			Expect(util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad2, timeout)).Should(BeNil())
 		})
 
 		AfterEach(func() {
@@ -42,12 +85,9 @@ var _ = Describe("Verify 'User Defined Injections'", func() {
 		})
 
 		It("Config map in correct namespace, one label to inject, POD specification WITHOUT resource name", func() {
-			configMap = util.GetConfigMap("nri-user-defined-injections", "kube-system")
-			configMap = util.AddData(configMap,
-				"customInjection",
-				"{\"op\": \"add\", \"path\": \"/metadata/annotations\", \"value\": {\"k8s.v1.cni.cncf.io/networks\": \"sriov-net-attach-def\"}}")
-			err = util.ApplyConfigMap(cs.CoreV1Interface, configMap, timeout)
-			Expect(err).Should(BeNil())
+			configMap = util.GetConfigMap("nri-control-switches", "kube-system")
+			configMap = util.AddData(configMap, "config.json", value)
+			Expect(util.ApplyConfigMap(cs.CoreV1Interface, configMap, timeout)).Should(BeNil())
 
 			// wait for configmap to be consumed by NRI, expected to see in logs something like
 			// webhook.go:920] Initializing user-defined injections with key: customInjection, value: {}
@@ -56,8 +96,7 @@ var _ = Describe("Verify 'User Defined Injections'", func() {
 			pod = util.GetPodDefinition(*testNs, defaultPodName)
 			pod = util.AddMetadataLabel(pod, "customInjection", "true")
 
-			err = util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)
-			Expect(err).Should(BeNil())
+			Expect(util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)).Should(BeNil())
 			Expect(pod.Name).ShouldNot(BeNil())
 
 			pod, err = util.UpdatePodInfo(cs.CoreV1Interface, pod, timeout)
@@ -68,12 +107,9 @@ var _ = Describe("Verify 'User Defined Injections'", func() {
 		})
 
 		It("Config map in correct namespace, one label to inject, POD specification WITH resource name", func() {
-			configMap = util.GetConfigMap("nri-user-defined-injections", "kube-system")
-			configMap = util.AddData(configMap,
-				"customInjection",
-				"{\"op\": \"add\", \"path\": \"/metadata/annotations\", \"value\": {\"k8s.v1.cni.cncf.io/networks\": \"sriov-net-attach-def\"}}")
-			err = util.ApplyConfigMap(cs.CoreV1Interface, configMap, timeout)
-			Expect(err).Should(BeNil())
+			configMap = util.GetConfigMap("nri-control-switches", "kube-system")
+			configMap = util.AddData(configMap, "config.json", value)
+			Expect(util.ApplyConfigMap(cs.CoreV1Interface, configMap, timeout)).Should(BeNil())
 
 			// wait for configmap to be consumed by NRI, expected to see in logs something like
 			// webhook.go:920] Initializing user-defined injections with key: customInjection, value: {}
@@ -82,8 +118,7 @@ var _ = Describe("Verify 'User Defined Injections'", func() {
 			pod = util.GetOneNetwork(testNetworkName, *testNs, defaultPodName)
 			pod = util.AddMetadataLabel(pod, "customInjection", "true")
 
-			err = util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)
-			Expect(err).Should(BeNil())
+			Expect(util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)).Should(BeNil())
 			Expect(pod.Name).ShouldNot(BeNil())
 
 			pod, err = util.UpdatePodInfo(cs.CoreV1Interface, pod, timeout)
@@ -94,15 +129,9 @@ var _ = Describe("Verify 'User Defined Injections'", func() {
 		})
 
 		It("Config map in correct namespace, TWO labels to inject, POD specification WITH resource name", func() {
-			configMap = util.GetConfigMap("nri-user-defined-injections", "kube-system")
-			configMap = util.AddData(configMap,
-				"customInjection",
-				"{\"op\": \"add\", \"path\": \"/metadata/annotations\", \"value\": {\"k8s.v1.cni.cncf.io/networks\": \"sriov-net-attach-def\"}}")
-			configMap = util.AddData(configMap,
-				"secondInjection",
-				"{\"op\": \"add\", \"path\": \"/metadata/annotations\", \"value\": {\"top-secret\": \"password\"}}")
-			err = util.ApplyConfigMap(cs.CoreV1Interface, configMap, timeout)
-			Expect(err).Should(BeNil())
+			configMap = util.GetConfigMap("nri-control-switches", "kube-system")
+			configMap = util.AddData(configMap, "config.json", mergeValueAndSecond)
+			Expect(util.ApplyConfigMap(cs.CoreV1Interface, configMap, timeout)).Should(BeNil())
 
 			// wait for configmap to be consumed by NRI, expected to see in logs something like
 			// webhook.go:920] Initializing user-defined injections with key: customInjection, value: {}
@@ -112,8 +141,7 @@ var _ = Describe("Verify 'User Defined Injections'", func() {
 			pod = util.AddMetadataLabel(pod, "customInjection", "true")
 			pod = util.AddMetadataLabel(pod, "secondInjection", "true")
 
-			err = util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)
-			Expect(err).Should(BeNil())
+			Expect(util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)).Should(BeNil())
 			Expect(pod.Name).ShouldNot(BeNil())
 
 			pod, err = util.UpdatePodInfo(cs.CoreV1Interface, pod, timeout)
@@ -125,12 +153,9 @@ var _ = Describe("Verify 'User Defined Injections'", func() {
 		})
 
 		It("ConfigMap in correct namespace, ONE labels to inject not related to network, POD specification WITH resource name", func() {
-			configMap = util.GetConfigMap("nri-user-defined-injections", "kube-system")
-			configMap = util.AddData(configMap,
-				"secondInjection",
-				"{\"op\": \"add\", \"path\": \"/metadata/annotations\", \"value\": {\"top-secret\": \"password\"}}")
-			err = util.ApplyConfigMap(cs.CoreV1Interface, configMap, timeout)
-			Expect(err).Should(BeNil())
+			configMap = util.GetConfigMap("nri-control-switches", "kube-system")
+			configMap = util.AddData(configMap, "config.json", secondValue)
+			Expect(util.ApplyConfigMap(cs.CoreV1Interface, configMap, timeout)).Should(BeNil())
 
 			// wait for configmap to be consumed by NRI, expected to see in logs something like
 			// webhook.go:920] Initializing user-defined injections with key: customInjection, value: {}
@@ -139,8 +164,7 @@ var _ = Describe("Verify 'User Defined Injections'", func() {
 			pod = util.GetOneNetwork(testNetworkName, *testNs, defaultPodName)
 			pod = util.AddMetadataLabel(pod, "secondInjection", "true")
 
-			err = util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)
-			Expect(err).Should(BeNil())
+			Expect(util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)).Should(BeNil())
 			Expect(pod.Name).ShouldNot(BeNil())
 
 			pod, err = util.UpdatePodInfo(cs.CoreV1Interface, pod, timeout)
@@ -152,12 +176,9 @@ var _ = Describe("Verify 'User Defined Injections'", func() {
 		})
 
 		It("Create one POD and next update configMap and create second POD, both should have different injections.", func() {
-			configMap = util.GetConfigMap("nri-user-defined-injections", "kube-system")
-			configMap = util.AddData(configMap,
-				"customInjection",
-				"{\"op\": \"add\", \"path\": \"/metadata/annotations\", \"value\": {\"k8s.v1.cni.cncf.io/networks\": \"sriov-net-attach-def\"}}")
-			err = util.ApplyConfigMap(cs.CoreV1Interface, configMap, timeout)
-			Expect(err).Should(BeNil())
+			configMap = util.GetConfigMap("nri-control-switches", "kube-system")
+			configMap = util.AddData(configMap, "config.json", value)
+			Expect(util.ApplyConfigMap(cs.CoreV1Interface, configMap, timeout)).Should(BeNil())
 
 			// wait for configmap to be consumed by NRI, expected to see in logs something like
 			// webhook.go:920] Initializing user-defined injections with key: customInjection, value: {}
@@ -166,8 +187,7 @@ var _ = Describe("Verify 'User Defined Injections'", func() {
 			pod = util.GetOneNetwork(testNetworkName, *testNs, defaultPodName)
 			pod = util.AddMetadataLabel(pod, "customInjection", "true")
 
-			err = util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)
-			Expect(err).Should(BeNil())
+			Expect(util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)).Should(BeNil())
 			Expect(pod.Name).ShouldNot(BeNil())
 
 			pod, err = util.UpdatePodInfo(cs.CoreV1Interface, pod, timeout)
@@ -178,12 +198,9 @@ var _ = Describe("Verify 'User Defined Injections'", func() {
 
 			// update ConfigMap
 			util.DeleteConfigMap(cs.CoreV1Interface, configMap, timeout)
-			configMap = util.GetConfigMap("nri-user-defined-injections", "kube-system")
-			configMap = util.AddData(configMap,
-				"secondInjection",
-				"{\"op\": \"add\", \"path\": \"/metadata/annotations\", \"value\": {\"top-secret\": \"password\"}}")
-			err = util.ApplyConfigMap(cs.CoreV1Interface, configMap, timeout)
-			Expect(err).Should(BeNil())
+			configMap = util.GetConfigMap("nri-control-switches", "kube-system")
+			configMap = util.AddData(configMap, "config.json", secondValue)
+			Expect(util.ApplyConfigMap(cs.CoreV1Interface, configMap, timeout)).Should(BeNil())
 
 			// wait for configmap to be consumed by NRI, expected to see in logs something like
 			// webhook.go:920] Initializing user-defined injections with key: customInjection, value: {}
@@ -192,8 +209,7 @@ var _ = Describe("Verify 'User Defined Injections'", func() {
 			pod2 = util.GetOneNetwork(testNetworkName, *testNs, "default-pod-name")
 			pod2 = util.AddMetadataLabel(pod2, "secondInjection", "true")
 
-			err = util.CreateRunningPod(cs.CoreV1Interface, pod2, timeout, interval)
-			Expect(err).Should(BeNil())
+			Expect(util.CreateRunningPod(cs.CoreV1Interface, pod2, timeout, interval)).Should(BeNil())
 			Expect(pod2.Name).ShouldNot(BeNil())
 
 			defer util.DeletePod(cs.CoreV1Interface, pod2, timeout)
@@ -213,12 +229,9 @@ var _ = Describe("Verify 'User Defined Injections'", func() {
 		})
 
 		It("Delete ConfigMap and verify that old label are not removed from existing PODs", func() {
-			configMap = util.GetConfigMap("nri-user-defined-injections", "kube-system")
-			configMap = util.AddData(configMap,
-				"customInjection",
-				"{\"op\": \"add\", \"path\": \"/metadata/annotations\", \"value\": {\"k8s.v1.cni.cncf.io/networks\": \"sriov-net-attach-def\"}}")
-			err = util.ApplyConfigMap(cs.CoreV1Interface, configMap, timeout)
-			Expect(err).Should(BeNil())
+			configMap = util.GetConfigMap("nri-control-switches", "kube-system")
+			configMap = util.AddData(configMap, "config.json", value)
+			Expect(util.ApplyConfigMap(cs.CoreV1Interface, configMap, timeout)).Should(BeNil())
 
 			// wait for configmap to be consumed by NRI, expected to see in logs something like
 			// webhook.go:920] Initializing user-defined injections with key: customInjection, value: {}
@@ -227,8 +240,7 @@ var _ = Describe("Verify 'User Defined Injections'", func() {
 			pod = util.GetOneNetwork(testNetworkName, *testNs, defaultPodName)
 			pod = util.AddMetadataLabel(pod, "customInjection", "true")
 
-			err = util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)
-			Expect(err).Should(BeNil())
+			Expect(util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)).Should(BeNil())
 			Expect(pod.Name).ShouldNot(BeNil())
 
 			pod, err = util.UpdatePodInfo(cs.CoreV1Interface, pod, timeout)
@@ -251,12 +263,9 @@ var _ = Describe("Verify 'User Defined Injections'", func() {
 		})
 
 		It("Create POD and valid ConfigMap, next delete ConfigMap and create anther POD, expected without annotations", func() {
-			configMap = util.GetConfigMap("nri-user-defined-injections", "kube-system")
-			configMap = util.AddData(configMap,
-				"customInjection",
-				"{\"op\": \"add\", \"path\": \"/metadata/annotations\", \"value\": {\"k8s.v1.cni.cncf.io/networks\": \"sriov-net-attach-def\"}}")
-			err = util.ApplyConfigMap(cs.CoreV1Interface, configMap, timeout)
-			Expect(err).Should(BeNil())
+			configMap = util.GetConfigMap("nri-control-switches", "kube-system")
+			configMap = util.AddData(configMap, "config.json", value)
+			Expect(util.ApplyConfigMap(cs.CoreV1Interface, configMap, timeout)).Should(BeNil())
 
 			// wait for configmap to be consumed by NRI, expected to see in logs something like
 			// webhook.go:920] Initializing user-defined injections with key: customInjection, value: {}
@@ -265,8 +274,7 @@ var _ = Describe("Verify 'User Defined Injections'", func() {
 			pod = util.GetOneNetwork(testNetworkName, *testNs, defaultPodName)
 			pod = util.AddMetadataLabel(pod, "customInjection", "true")
 
-			err = util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)
-			Expect(err).Should(BeNil())
+			Expect(util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)).Should(BeNil())
 			Expect(pod.Name).ShouldNot(BeNil())
 
 			pod, err = util.UpdatePodInfo(cs.CoreV1Interface, pod, timeout)
@@ -285,8 +293,7 @@ var _ = Describe("Verify 'User Defined Injections'", func() {
 			pod = util.GetOneNetwork(testNetworkName, *testNs, defaultPodName)
 			pod = util.AddMetadataLabel(pod, "customInjection", "true")
 
-			err = util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)
-			Expect(err).Should(BeNil())
+			Expect(util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)).Should(BeNil())
 			Expect(pod.Name).ShouldNot(BeNil())
 
 			pod, err = util.UpdatePodInfo(cs.CoreV1Interface, pod, timeout)
@@ -297,11 +304,10 @@ var _ = Describe("Verify 'User Defined Injections'", func() {
 		})
 	})
 
-	Context("Negative use cases - expected that user-defined-injections-injections are not going to be injected", func() {
+	Context("Negative use cases - expected that user-defined-injections are not going to be injected", func() {
 		BeforeEach(func() {
 			nad = util.GetResourceSelectorOnly(testNetworkName, *testNs, testNetworkResName)
-			err = util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)
-			Expect(err).Should(BeNil())
+			Expect(util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)).Should(BeNil())
 		})
 
 		AfterEach(func() {
@@ -318,8 +324,7 @@ var _ = Describe("Verify 'User Defined Injections'", func() {
 			pod = util.GetOneNetwork(testNetworkName, *testNs, defaultPodName)
 			pod = util.AddMetadataLabel(pod, "customInjection", "true")
 
-			err = util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)
-			Expect(err).Should(BeNil())
+			Expect(util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)).Should(BeNil())
 			Expect(pod.Name).ShouldNot(BeNil())
 
 			pod, err = util.UpdatePodInfo(cs.CoreV1Interface, pod, timeout)
@@ -330,12 +335,9 @@ var _ = Describe("Verify 'User Defined Injections'", func() {
 		})
 
 		It("ConfigMap in different namespace than NRI, expected to be ignored", func() {
-			configMap = util.GetConfigMap("nri-user-defined-injections", "default")
-			configMap = util.AddData(configMap,
-				"customInjection",
-				"{\"op\": \"add\", \"path\": \"/metadata/annotations\", \"value\": {\"k8s.v1.cni.cncf.io/networks\": \"sriov-net-attach-def\"}}")
-			err = util.ApplyConfigMap(cs.CoreV1Interface, configMap, timeout)
-			Expect(err).Should(BeNil())
+			configMap = util.GetConfigMap("nri-control-switches", "default")
+			configMap = util.AddData(configMap, "config.json", value)
+			Expect(util.ApplyConfigMap(cs.CoreV1Interface, configMap, timeout)).Should(BeNil())
 
 			// wait for configmap to be consumed by NRI, expected to see in logs something like
 			// webhook.go:920] Initializing user-defined injections with key: customInjection, value: {}
@@ -344,8 +346,7 @@ var _ = Describe("Verify 'User Defined Injections'", func() {
 			pod = util.GetOneNetwork(testNetworkName, *testNs, defaultPodName)
 			pod = util.AddMetadataLabel(pod, "customInjection", "true")
 
-			err = util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)
-			Expect(err).Should(BeNil())
+			Expect(util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)).Should(BeNil())
 			Expect(pod.Name).ShouldNot(BeNil())
 
 			pod, err = util.UpdatePodInfo(cs.CoreV1Interface, pod, timeout)
@@ -357,11 +358,8 @@ var _ = Describe("Verify 'User Defined Injections'", func() {
 
 		It("ConfigMap in correct namespace, wrong ConfigMap name, expected to be ignored", func() {
 			configMap = util.GetConfigMap("nri-user-defined-chaos", "kube-system")
-			configMap = util.AddData(configMap,
-				"customInjection",
-				"{\"op\": \"add\", \"path\": \"/metadata/annotations\", \"value\": {\"k8s.v1.cni.cncf.io/networks\": \"sriov-net-attach-def\"}}")
-			err = util.ApplyConfigMap(cs.CoreV1Interface, configMap, timeout)
-			Expect(err).Should(BeNil())
+			configMap = util.AddData(configMap, "config.json", value)
+			Expect(util.ApplyConfigMap(cs.CoreV1Interface, configMap, timeout)).Should(BeNil())
 
 			// wait for configmap to be consumed by NRI, expected to see in logs something like
 			// webhook.go:920] Initializing user-defined injections with key: customInjection, value: {}
@@ -370,8 +368,7 @@ var _ = Describe("Verify 'User Defined Injections'", func() {
 			pod = util.GetOneNetwork(testNetworkName, *testNs, defaultPodName)
 			pod = util.AddMetadataLabel(pod, "customInjection", "true")
 
-			err = util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)
-			Expect(err).Should(BeNil())
+			Expect(util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)).Should(BeNil())
 			Expect(pod.Name).ShouldNot(BeNil())
 
 			pod, err = util.UpdatePodInfo(cs.CoreV1Interface, pod, timeout)
@@ -382,20 +379,16 @@ var _ = Describe("Verify 'User Defined Injections'", func() {
 		})
 
 		It("ConfigMap in correct namespace and name, POD does not define the label", func() {
-			configMap = util.GetConfigMap("nri-user-defined-injections", "kube-system")
-			configMap = util.AddData(configMap,
-				"customInjection",
-				"{\"op\": \"add\", \"path\": \"/metadata/annotations\", \"value\": {\"k8s.v1.cni.cncf.io/networks\": \"sriov-net-attach-def\"}}")
-			err = util.ApplyConfigMap(cs.CoreV1Interface, configMap, timeout)
-			Expect(err).Should(BeNil())
+			configMap = util.GetConfigMap("nri-control-switches", "kube-system")
+			configMap = util.AddData(configMap, "config.json", value)
+			Expect(util.ApplyConfigMap(cs.CoreV1Interface, configMap, timeout)).Should(BeNil())
 
 			// wait for configmap to be consumed by NRI, expected to see in logs something like
 			// webhook.go:920] Initializing user-defined injections with key: customInjection, value: {}
 			time.Sleep(60 * time.Second)
 
 			pod = util.GetOneNetwork(testNetworkName, *testNs, defaultPodName)
-			err = util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)
-			Expect(err).Should(BeNil())
+			Expect(util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)).Should(BeNil())
 			Expect(pod.Name).ShouldNot(BeNil())
 
 			pod, err = util.UpdatePodInfo(cs.CoreV1Interface, pod, timeout)
@@ -406,12 +399,9 @@ var _ = Describe("Verify 'User Defined Injections'", func() {
 		})
 
 		It("ConfigMap in correct namespace and name, POD does not define the same label to true as ConfigMap", func() {
-			configMap = util.GetConfigMap("nri-user-defined-injections", "kube-system")
-			configMap = util.AddData(configMap,
-				"customInjection",
-				"{\"op\": \"add\", \"path\": \"/metadata/annotations\", \"value\": {\"k8s.v1.cni.cncf.io/networks\": \"sriov-net-attach-def\"}}")
-			err = util.ApplyConfigMap(cs.CoreV1Interface, configMap, timeout)
-			Expect(err).Should(BeNil())
+			configMap = util.GetConfigMap("nri-control-switches", "kube-system")
+			configMap = util.AddData(configMap, "config.json", value)
+			Expect(util.ApplyConfigMap(cs.CoreV1Interface, configMap, timeout)).Should(BeNil())
 
 			// wait for configmap to be consumed by NRI, expected to see in logs something like
 			// webhook.go:920] Initializing user-defined injections with key: customInjection, value: {}
@@ -420,8 +410,7 @@ var _ = Describe("Verify 'User Defined Injections'", func() {
 			pod = util.GetOneNetwork(testNetworkName, *testNs, defaultPodName)
 			pod = util.AddMetadataLabel(pod, "somethingElseLabel", "true")
 
-			err = util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)
-			Expect(err).Should(BeNil())
+			Expect(util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)).Should(BeNil())
 			Expect(pod.Name).ShouldNot(BeNil())
 
 			pod, err = util.UpdatePodInfo(cs.CoreV1Interface, pod, timeout)
@@ -432,12 +421,9 @@ var _ = Describe("Verify 'User Defined Injections'", func() {
 		})
 
 		It("ConfigMap in correct namespace and name, POD define the same label as ConfigMap but to false", func() {
-			configMap = util.GetConfigMap("nri-user-defined-injections", "kube-system")
-			configMap = util.AddData(configMap,
-				"customInjection",
-				"{\"op\": \"add\", \"path\": \"/metadata/annotations\", \"value\": {\"k8s.v1.cni.cncf.io/networks\": \"sriov-net-attach-def\"}}")
-			err = util.ApplyConfigMap(cs.CoreV1Interface, configMap, timeout)
-			Expect(err).Should(BeNil())
+			configMap = util.GetConfigMap("nri-control-switches", "kube-system")
+			configMap = util.AddData(configMap, "config.json", value)
+			Expect(util.ApplyConfigMap(cs.CoreV1Interface, configMap, timeout)).Should(BeNil())
 
 			// wait for configmap to be consumed by NRI, expected to see in logs something like
 			// webhook.go:920] Initializing user-defined injections with key: customInjection, value: {}
@@ -446,8 +432,7 @@ var _ = Describe("Verify 'User Defined Injections'", func() {
 			pod = util.GetOneNetwork(testNetworkName, *testNs, defaultPodName)
 			pod = util.AddMetadataLabel(pod, "customInjection", "false")
 
-			err = util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)
-			Expect(err).Should(BeNil())
+			Expect(util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)).Should(BeNil())
 			Expect(pod.Name).ShouldNot(BeNil())
 
 			pod, err = util.UpdatePodInfo(cs.CoreV1Interface, pod, timeout)
@@ -458,12 +443,9 @@ var _ = Describe("Verify 'User Defined Injections'", func() {
 		})
 
 		It("ConfigMap in correct namespace and name, POD define the same label as ConfigMap but to some number", func() {
-			configMap = util.GetConfigMap("nri-user-defined-injections", "kube-system")
-			configMap = util.AddData(configMap,
-				"customInjection",
-				"{\"op\": \"add\", \"path\": \"/metadata/annotations\", \"value\": {\"k8s.v1.cni.cncf.io/networks\": \"sriov-net-attach-def\"}}")
-			err = util.ApplyConfigMap(cs.CoreV1Interface, configMap, timeout)
-			Expect(err).Should(BeNil())
+			configMap = util.GetConfigMap("nri-control-switches", "kube-system")
+			configMap = util.AddData(configMap, "config.json", value)
+			Expect(util.ApplyConfigMap(cs.CoreV1Interface, configMap, timeout)).Should(BeNil())
 
 			// wait for configmap to be consumed by NRI, expected to see in logs something like
 			// webhook.go:920] Initializing user-defined injections with key: customInjection, value: {}
@@ -472,8 +454,7 @@ var _ = Describe("Verify 'User Defined Injections'", func() {
 			pod = util.GetOneNetwork(testNetworkName, *testNs, defaultPodName)
 			pod = util.AddMetadataLabel(pod, "customInjection", "15")
 
-			err = util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)
-			Expect(err).Should(BeNil())
+			Expect(util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)).Should(BeNil())
 			Expect(pod.Name).ShouldNot(BeNil())
 
 			pod, err = util.UpdatePodInfo(cs.CoreV1Interface, pod, timeout)
@@ -484,22 +465,18 @@ var _ = Describe("Verify 'User Defined Injections'", func() {
 		})
 
 		It("ConfigMap in correct namespace and name, but different name of label than POD defines in metadata", func() {
-			configMap = util.GetConfigMap("nri-user-defined-injections", "kube-system")
-			configMap = util.AddData(configMap,
-				"specificInjection",
-				"{\"op\": \"add\", \"path\": \"/metadata/annotations\", \"value\": {\"k8s.v1.cni.cncf.io/networks\": \"sriov-net-attach-def\"}}")
-			err = util.ApplyConfigMap(cs.CoreV1Interface, configMap, timeout)
-			Expect(err).Should(BeNil())
+			configMap = util.GetConfigMap("nri-control-switches", "kube-system")
+			configMap = util.AddData(configMap, "config.json", value)
+			Expect(util.ApplyConfigMap(cs.CoreV1Interface, configMap, timeout)).Should(BeNil())
 
 			// wait for configmap to be consumed by NRI, expected to see in logs something like
 			// webhook.go:920] Initializing user-defined injections with key: customInjection, value: {}
 			time.Sleep(60 * time.Second)
 
 			pod = util.GetOneNetwork(testNetworkName, *testNs, defaultPodName)
-			pod = util.AddMetadataLabel(pod, "customInjection", "true")
+			pod = util.AddMetadataLabel(pod, "specificInjection", "true")
 
-			err = util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)
-			Expect(err).Should(BeNil())
+			Expect(util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)).Should(BeNil())
 			Expect(pod.Name).ShouldNot(BeNil())
 
 			pod, err = util.UpdatePodInfo(cs.CoreV1Interface, pod, timeout)
@@ -510,12 +487,9 @@ var _ = Describe("Verify 'User Defined Injections'", func() {
 		})
 
 		It("ConfigMap in correct namespace and name, labels are correct, missing second NAD, expected POD is not created", func() {
-			configMap = util.GetConfigMap("nri-user-defined-injections", "kube-system")
-			configMap = util.AddData(configMap,
-				"customInjection",
-				"{\"op\": \"add\", \"path\": \"/metadata/annotations\", \"value\": {\"k8s.v1.cni.cncf.io/networks\": \"sriov-net-attach-def\"}}")
-			err = util.ApplyConfigMap(cs.CoreV1Interface, configMap, timeout)
-			Expect(err).Should(BeNil())
+			configMap = util.GetConfigMap("nri-control-switches", "kube-system")
+			configMap = util.AddData(configMap, "config.json", value)
+			Expect(util.ApplyConfigMap(cs.CoreV1Interface, configMap, timeout)).Should(BeNil())
 
 			// wait for configmap to be consumed by NRI, expected to see in logs something like
 			// webhook.go:920] Initializing user-defined injections with key: customInjection, value: {}
@@ -524,8 +498,7 @@ var _ = Describe("Verify 'User Defined Injections'", func() {
 			pod = util.GetOneNetwork(testNetworkName, *testNs, defaultPodName)
 			pod = util.AddMetadataLabel(pod, "customInjection", "true")
 
-			err = util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)
-			Expect(err).ShouldNot(BeNil())
+			Expect(util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)).ShouldNot(BeNil())
 		})
 	})
 })
