@@ -20,7 +20,6 @@ MULTUS_DAEMONSET_URL="https://raw.githubusercontent.com/k8snetworkplumbingwg/mul
 MULTUS_NAME="multus"
 CNIS_DAEMONSET_URL="https://raw.githubusercontent.com/k8snetworkplumbingwg/multus-cni/master/e2e/cni-install.yml"
 CNIS_NAME="cni-plugins"
-TEST_NAMESPACE="default"
 # array with the KinD workers
 KIND_WORKER_NAMES=( kind-worker kind-worker2 )
 
@@ -67,7 +66,7 @@ retry() {
     fi
     echo "Exit code: '$status'. Sleeping '$delay' seconds before retrying"
     sleep $delay
-    let retries--
+    (( retries-- )) || true
   done
   return $status
 }
