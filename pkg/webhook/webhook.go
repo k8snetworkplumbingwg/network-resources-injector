@@ -20,20 +20,15 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/golang/glog"
 	cniv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	"github.com/pkg/errors"
 	multus "gopkg.in/intel/multus-cni.v3/pkg/types"
 
-	"github.com/k8snetworkplumbingwg/network-resources-injector/pkg/controlswitches"
-	netcache "github.com/k8snetworkplumbingwg/network-resources-injector/pkg/tools"
-	"github.com/k8snetworkplumbingwg/network-resources-injector/pkg/types"
 	admissionv1 "k8s.io/api/admission/v1"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -43,18 +38,12 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+
+	"github.com/k8snetworkplumbingwg/network-resources-injector/pkg/controlswitches"
+	netcache "github.com/k8snetworkplumbingwg/network-resources-injector/pkg/tools"
+	"github.com/k8snetworkplumbingwg/network-resources-injector/pkg/types"
+	"github.com/k8snetworkplumbingwg/network-resources-injector/pkg/userdefinedinjections"
 )
-
-type jsonPatchOperation struct {
-	Operation string      `json:"op"`
-	Path      string      `json:"path"`
-	Value     interface{} `json:"value,omitempty"`
-}
-
-type userDefinedInjections struct {
-	sync.Mutex
-	Patchs map[string]jsonPatchOperation
-}
 
 type hugepageResourceData struct {
 	ResourceName  string
@@ -69,14 +58,18 @@ const (
 )
 
 var (
-	clientset          kubernetes.Interface
-	nadCache           netcache.NetAttachDefCacheService
-	userDefinedInjects = &userDefinedInjections{Patchs: make(map[string]jsonPatchOperation)}
-	controlSwitches    *controlswitches.ControlSwitches
+	clientset             kubernetes.Interface
+	nadCache              netcache.NetAttachDefCacheService
+	userDefinedInjections *userdefinedinjections.UserDefinedInjections
+	controlSwitches       *controlswitches.ControlSwitches
 )
 
 func SetControlSwitches(activeConfiguration *controlswitches.ControlSwitches) {
 	controlSwitches = activeConfiguration
+}
+
+func SetUserInjectionStructure(injections *userdefinedinjections.UserDefinedInjections) {
+	userDefinedInjections = injections
 }
 
 func prepareAdmissionReviewResponse(allowed bool, message string, ar *admissionv1.AdmissionReview) error {
@@ -431,8 +424,8 @@ func writeResponse(w http.ResponseWriter, ar *admissionv1.AdmissionReview) {
 	w.Write(resp)
 }
 
-func patchEmptyResources(patch []jsonPatchOperation, containerIndex uint, key string) []jsonPatchOperation {
-	patch = append(patch, jsonPatchOperation{
+func patchEmptyResources(patch []types.JsonPatchOperation, containerIndex uint, key string) []types.JsonPatchOperation {
+	patch = append(patch, types.JsonPatchOperation{
 		Operation: "add",
 		Path:      "/spec/containers/" + fmt.Sprintf("%d", containerIndex) + "/resources/" + toSafeJsonPatchKey(key),
 		Value:     corev1.ResourceList{},
@@ -440,7 +433,7 @@ func patchEmptyResources(patch []jsonPatchOperation, containerIndex uint, key st
 	return patch
 }
 
-func addVolDownwardAPI(patch []jsonPatchOperation, hugepageResourceList []hugepageResourceData, pod *corev1.Pod) []jsonPatchOperation {
+func addVolDownwardAPI(patch []types.JsonPatchOperation, hugepageResourceList []hugepageResourceData, pod *corev1.Pod) []types.JsonPatchOperation {
 	dAPIItems := []corev1.DownwardAPIVolumeFile{}
 
 	if pod.Labels != nil && len(pod.Labels) > 0 {
@@ -489,7 +482,7 @@ func addVolDownwardAPI(patch []jsonPatchOperation, hugepageResourceList []hugepa
 		VolumeSource: volSource,
 	}
 
-	patch = append(patch, jsonPatchOperation{
+	patch = append(patch, types.JsonPatchOperation{
 		Operation: "add",
 		Path:      "/spec/volumes/-",
 		Value:     vol,
@@ -498,7 +491,7 @@ func addVolDownwardAPI(patch []jsonPatchOperation, hugepageResourceList []hugepa
 	return patch
 }
 
-func addVolumeMount(patch []jsonPatchOperation, containersLen int) []jsonPatchOperation {
+func addVolumeMount(patch []types.JsonPatchOperation, containersLen int) []types.JsonPatchOperation {
 
 	vm := corev1.VolumeMount{
 		Name:      "podnetinfo",
@@ -506,7 +499,7 @@ func addVolumeMount(patch []jsonPatchOperation, containersLen int) []jsonPatchOp
 		MountPath: types.DownwardAPIMountPath,
 	}
 	for containerIndex := 0; containerIndex < containersLen; containerIndex++ {
-		patch = append(patch, jsonPatchOperation{
+		patch = append(patch, types.JsonPatchOperation{
 			Operation: "add",
 			Path:      "/spec/containers/" + strconv.Itoa(containerIndex) + "/volumeMounts/-",
 			Value:     vm,
@@ -516,14 +509,14 @@ func addVolumeMount(patch []jsonPatchOperation, containersLen int) []jsonPatchOp
 	return patch
 }
 
-func createVolPatch(patch []jsonPatchOperation, hugepageResourceList []hugepageResourceData, pod *corev1.Pod) []jsonPatchOperation {
+func createVolPatch(patch []types.JsonPatchOperation, hugepageResourceList []hugepageResourceData, pod *corev1.Pod) []types.JsonPatchOperation {
 	patch = addVolumeMount(patch, len(pod.Spec.Containers))
 	patch = addVolDownwardAPI(patch, hugepageResourceList, pod)
 	return patch
 }
 
-func addEnvVar(patch []jsonPatchOperation, containerIndex int, firstElement bool,
-	envName string, envVal string) []jsonPatchOperation {
+func addEnvVar(patch []types.JsonPatchOperation, containerIndex int, firstElement bool,
+	envName string, envVal string) []types.JsonPatchOperation {
 
 	env := corev1.EnvVar{
 		Name:  envName,
@@ -531,13 +524,13 @@ func addEnvVar(patch []jsonPatchOperation, containerIndex int, firstElement bool
 	}
 
 	if firstElement {
-		patch = append(patch, jsonPatchOperation{
+		patch = append(patch, types.JsonPatchOperation{
 			Operation: "add",
 			Path:      "/spec/containers/" + fmt.Sprintf("%d", containerIndex) + "/env",
 			Value:     []corev1.EnvVar{env},
 		})
 	} else {
-		patch = append(patch, jsonPatchOperation{
+		patch = append(patch, types.JsonPatchOperation{
 			Operation: "add",
 			Path:      "/spec/containers/" + fmt.Sprintf("%d", containerIndex) + "/env/-",
 			Value:     env,
@@ -547,8 +540,8 @@ func addEnvVar(patch []jsonPatchOperation, containerIndex int, firstElement bool
 	return patch
 }
 
-func createEnvPatch(patch []jsonPatchOperation, container *corev1.Container,
-	containerIndex int, envName string, envVal string) []jsonPatchOperation {
+func createEnvPatch(patch []types.JsonPatchOperation, container *corev1.Container,
+	containerIndex int, envName string, envVal string) []types.JsonPatchOperation {
 
 	// Determine if requested ENV already exists
 	found := false
@@ -574,7 +567,7 @@ func createEnvPatch(patch []jsonPatchOperation, container *corev1.Container,
 	return patch
 }
 
-func createNodeSelectorPatch(patch []jsonPatchOperation, existing map[string]string, desired map[string]string) []jsonPatchOperation {
+func createNodeSelectorPatch(patch []types.JsonPatchOperation, existing map[string]string, desired map[string]string) []types.JsonPatchOperation {
 	targetMap := make(map[string]string)
 	if existing != nil {
 		for k, v := range existing {
@@ -589,7 +582,7 @@ func createNodeSelectorPatch(patch []jsonPatchOperation, existing map[string]str
 	if len(targetMap) == 0 {
 		return patch
 	}
-	patch = append(patch, jsonPatchOperation{
+	patch = append(patch, types.JsonPatchOperation{
 		Operation: "add",
 		Path:      "/spec/nodeSelector",
 		Value:     targetMap,
@@ -597,7 +590,7 @@ func createNodeSelectorPatch(patch []jsonPatchOperation, existing map[string]str
 	return patch
 }
 
-func createResourcePatch(patch []jsonPatchOperation, Containers []corev1.Container, resourceRequests map[string]int64) []jsonPatchOperation {
+func createResourcePatch(patch []types.JsonPatchOperation, Containers []corev1.Container, resourceRequests map[string]int64) []types.JsonPatchOperation {
 	/* check whether resources paths exists in the first container and add as the first patches if missing */
 	if len(Containers[0].Resources.Requests) == 0 {
 		patch = patchEmptyResources(patch, 0, "requests")
@@ -626,7 +619,7 @@ func createResourcePatch(patch []jsonPatchOperation, Containers []corev1.Contain
 	return patch
 }
 
-func updateResourcePatch(patch []jsonPatchOperation, Containers []corev1.Container, resourceRequests map[string]int64) []jsonPatchOperation {
+func updateResourcePatch(patch []types.JsonPatchOperation, Containers []corev1.Container, resourceRequests map[string]int64) []types.JsonPatchOperation {
 	var existingrequestsMap map[corev1.ResourceName]resource.Quantity
 	var existingLimitsMap map[corev1.ResourceName]resource.Quantity
 
@@ -658,13 +651,13 @@ func updateResourcePatch(patch []jsonPatchOperation, Containers []corev1.Contain
 	return patch
 }
 
-func appendResource(patch []jsonPatchOperation, resourceName string, reqQuantity, limitQuantity resource.Quantity) []jsonPatchOperation {
-	patch = append(patch, jsonPatchOperation{
+func appendResource(patch []types.JsonPatchOperation, resourceName string, reqQuantity, limitQuantity resource.Quantity) []types.JsonPatchOperation {
+	patch = append(patch, types.JsonPatchOperation{
 		Operation: "add",
 		Path:      "/spec/containers/0/resources/requests/" + toSafeJsonPatchKey(resourceName),
 		Value:     reqQuantity,
 	})
-	patch = append(patch, jsonPatchOperation{
+	patch = append(patch, types.JsonPatchOperation{
 		Operation: "add",
 		Path:      "/spec/containers/0/resources/limits/" + toSafeJsonPatchKey(resourceName),
 		Value:     limitQuantity,
@@ -682,28 +675,9 @@ func getResourceList(resourceRequests map[string]int64) *corev1.ResourceList {
 	return &resourceList
 }
 
-func createCustomizedPatch(pod corev1.Pod) ([]jsonPatchOperation, error) {
-	var userDefinedPatch []jsonPatchOperation
-
-	// lock for reading
-	userDefinedInjects.Lock()
-	defer userDefinedInjects.Unlock()
-
-	for k, v := range userDefinedInjects.Patchs {
-		// The userDefinedInjects will be injected when:
-		// 1. Pod labels contain the patch key defined in userDefinedInjects, and
-		// 2. The value of patch key in pod labels(not in userDefinedInjects) is "true"
-		if podValue, exists := pod.ObjectMeta.Labels[k]; exists && strings.ToLower(podValue) == "true" {
-			userDefinedPatch = append(userDefinedPatch, v)
-		}
-	}
-
-	return userDefinedPatch, nil
-}
-
-func appendAddAnnotPatch(patch []jsonPatchOperation, pod corev1.Pod, userDefinedPatch []jsonPatchOperation) []jsonPatchOperation {
+func appendAddAnnotPatch(patch []types.JsonPatchOperation, pod corev1.Pod, userDefinedPatch []types.JsonPatchOperation) []types.JsonPatchOperation {
 	annotations := make(map[string]string)
-	patchOp := jsonPatchOperation{
+	patchOp := types.JsonPatchOperation{
 		Operation: "add",
 		Path:      "/metadata/annotations",
 		Value:     annotations,
@@ -735,12 +709,12 @@ func appendAddAnnotPatch(patch []jsonPatchOperation, pod corev1.Pod, userDefined
 	return patch
 }
 
-func appendCustomizedPatch(patch []jsonPatchOperation, pod corev1.Pod, userDefinedPatch []jsonPatchOperation) []jsonPatchOperation {
+func appendUserDefinedPatch(patch []types.JsonPatchOperation, pod corev1.Pod, userDefinedPatch []types.JsonPatchOperation) []types.JsonPatchOperation {
 	//Add operation for annotations is currently only supported
 	return appendAddAnnotPatch(patch, pod, userDefinedPatch)
 }
 
-func getNetworkSelections(annotationKey string, pod corev1.Pod, userDefinedPatch []jsonPatchOperation) (string, bool) {
+func getNetworkSelections(annotationKey string, pod corev1.Pod, userDefinedPatch []types.JsonPatchOperation) (string, bool) {
 	// User defined annotateKey takes precedence than userDefined injections
 	glog.Infof("search %s in original pod annotations", annotationKey)
 	nets, exists := pod.ObjectMeta.Annotations[annotationKey]
@@ -788,7 +762,7 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 	}
 	glog.Infof("AdmissionReview request received for pod %s/%s", pod.ObjectMeta.Namespace, pod.ObjectMeta.Name)
 
-	userDefinedPatch, err := createCustomizedPatch(pod)
+	userDefinedPatch, err := userDefinedInjections.CreateUserDefinedPatch(pod)
 	if err != nil {
 		glog.Warningf("failed to create user-defined injection patch for pod %s/%s, err: %v",
 			pod.ObjectMeta.Namespace, pod.ObjectMeta.Name, err)
@@ -858,7 +832,7 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		var patch []jsonPatchOperation
+		var patch []types.JsonPatchOperation
 		if len(resourceRequests) == 0 {
 			glog.Infof("pod %s/%s doesn't need any custom network resources", pod.ObjectMeta.Namespace, pod.ObjectMeta.Name)
 		} else {
@@ -925,7 +899,7 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 				}
 			}
 			patch = createVolPatch(patch, hugepageResourceList, &pod)
-			patch = appendCustomizedPatch(patch, pod, userDefinedPatch)
+			patch = appendUserDefinedPatch(patch, pod, userDefinedPatch)
 		}
 		patch = createNodeSelectorPatch(patch, pod.Spec.NodeSelector, desiredNsMap)
 		glog.Infof("patch after all mutations: %v for pod %s/%s", patch, pod.ObjectMeta.Namespace, pod.ObjectMeta.Name)
@@ -968,42 +942,4 @@ func SetupInClusterClient() kubernetes.Interface {
 		glog.Fatal(err)
 	}
 	return clientset
-}
-
-// SetCustomizedInjections sets additional injections to be applied in Pod spec
-func SetCustomizedInjections(injections *corev1.ConfigMap) {
-	// lock for writing
-	userDefinedInjects.Lock()
-	defer userDefinedInjects.Unlock()
-
-	var patch jsonPatchOperation
-	var userDefinedPatchs = userDefinedInjects.Patchs
-
-	for k, v := range injections.Data {
-		existValue, exists := userDefinedPatchs[k]
-		// unmarshal userDefined injection to json patch
-		err := json.Unmarshal([]byte(v), &patch)
-		if err != nil {
-			glog.Errorf("Failed to unmarshal user-defined injection: %v", v)
-			continue
-		}
-		// metadata.Annotations is the only supported field for user definition
-		// jsonPatchOperation.Path should be "/metadata/annotations"
-		if patch.Path != "/metadata/annotations" {
-			glog.Errorf("Path: %v is not supported, only /metadata/annotations can be defined by user", patch.Path)
-			continue
-		}
-		if !exists || !reflect.DeepEqual(existValue, patch) {
-			glog.Infof("Initializing user-defined injections with key: %v, value: %v", k, v)
-			userDefinedPatchs[k] = patch
-		}
-	}
-	// remove stale entries from userDefined configMap
-	for k := range userDefinedPatchs {
-		if _, ok := injections.Data[k]; ok {
-			continue
-		}
-		glog.Infof("Removing stale entry: %v from user-defined injections", k)
-		delete(userDefinedPatchs, k)
-	}
 }

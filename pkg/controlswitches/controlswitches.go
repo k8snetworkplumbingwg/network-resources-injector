@@ -22,11 +22,12 @@ import (
 
 	"github.com/golang/glog"
 	corev1 "k8s.io/api/core/v1"
+
+	"github.com/k8snetworkplumbingwg/network-resources-injector/pkg/types"
 )
 
 const (
 	// control switch keys
-	controlSwitchesFileKey = "config.json"
 	controlSwitchesMainKey = "features"
 
 	// enableHugePageDownAPIKey feature name
@@ -161,7 +162,7 @@ func (switches *ControlSwitches) setFeatureToState(featureName string, switchObj
 // :param controlSwitchesCm - Kubernetes ConfigMap with control switches definition
 func (switches *ControlSwitches) ProcessControlSwitchesConfigMap(controlSwitchesCm *corev1.ConfigMap) {
 	var err error
-	if v, fileExists := controlSwitchesCm.Data[controlSwitchesFileKey]; fileExists {
+	if v, fileExists := controlSwitchesCm.Data[types.ConfigMapMainFileKey]; fileExists {
 		var obj map[string]json.RawMessage
 
 		if err = json.Unmarshal([]byte(v), &obj); err != nil {
@@ -185,6 +186,6 @@ func (switches *ControlSwitches) ProcessControlSwitchesConfigMap(controlSwitches
 			glog.Warningf("Map does not contains [%s]", controlSwitchesMainKey)
 		}
 	} else {
-		glog.Warningf("Map does not contains [%s]", controlSwitchesFileKey)
+		glog.Warningf("Map does not contains [%s]", types.ConfigMapMainFileKey)
 	}
 }
