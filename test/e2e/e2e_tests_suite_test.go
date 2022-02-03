@@ -2,11 +2,13 @@ package e2e
 
 import (
 	"flag"
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
 
 	networkCoreClient "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/client/clientset/versioned/typed/k8s.cni.cncf.io/v1"
+	"github.com/k8snetworkplumbingwg/network-resources-injector/test/util"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	coreclient "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -73,3 +75,12 @@ var _ = BeforeSuite(func(done Done) {
 
 	close(done)
 }, 60)
+
+func hugepageOrSkip() {
+	available, err := util.IsMinHugepagesAvailable(cs.CoreV1Interface, minHugepages1Gi, minHugepages2Mi)
+	Expect(err).To(BeNil())
+	if !available {
+		Skip(fmt.Sprintf("minimum hugepages of %d Gi and %d Mi not found in any k8 worker nodes.",
+			minHugepages1Gi, minHugepages2Mi))
+	}
+}

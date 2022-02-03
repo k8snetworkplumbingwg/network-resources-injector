@@ -2,8 +2,8 @@ package e2e
 
 //a subset of tests require Hugepages enabled on the test node
 import (
-	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/k8snetworkplumbingwg/network-resources-injector/test/util"
 	. "github.com/onsi/ginkgo"
@@ -12,15 +12,6 @@ import (
 	cniv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	corev1 "k8s.io/api/core/v1"
 )
-
-func hugepageOrSkip() {
-	available, err := util.IsMinHugepagesAvailable(cs.CoreV1Interface, minHugepages1Gi, minHugepages2Mi)
-	Expect(err).To(BeNil())
-	if !available {
-		Skip(fmt.Sprintf("minimum hugepages of %d Gi and %d Mi not found in any k8 workner nodes.",
-			minHugepages1Gi, minHugepages2Mi))
-	}
-}
 
 var _ = Describe("POD in default namespace with downwarAPI already defined", func() {
 	var pod *corev1.Pod
@@ -195,6 +186,54 @@ var _ = Describe("Expose hugepages via Downward API, POD in default namespace", 
 			size, err = strconv.ParseInt(stdoutString, 10, 32)
 			Expect(err).Should(BeNil())
 			Expect(size).Should(Equal(int64(2048)))
+		})
+
+		It("POD with annotation about resourceName, hugepages1Gi limit and memory size are defined and are equal, HugePage feature disabled", func() {
+			const disabledState = `{
+				"features": {
+					"enableHugePageDownApi": false,
+					"enableHonorExistingResources": false,
+					"enableCustomizedInjection": false,
+					"enableResourceName": false
+				}
+			}
+			`
+
+			nad = util.GetResourceSelectorOnly(testNetworkName, *testNs, testNetworkResName)
+			Expect(util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)).Should(BeNil())
+
+			configMap := util.GetConfigMap("nri-control-switches", "kube-system")
+			configMap = util.AddData(configMap, "config.json", disabledState)
+			defer util.DeleteConfigMap(cs.CoreV1Interface, configMap, timeout)
+			Expect(util.ApplyConfigMap(cs.CoreV1Interface, configMap, timeout)).Should(BeNil())
+
+			// wait for configmap to be consumed by NRI
+			time.Sleep(60 * time.Second)
+
+			pod = util.GetOneNetwork(testNetworkName, *testNs, defaultPodName)
+			pod = util.AddToPodDefinitionHugePages1Gi(pod, 2, 2, 0)
+			pod = util.AddToPodDefinitionMemory(pod, 2, 2, 0)
+
+			Expect(util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)).Should(BeNil())
+			Expect(pod.Name).ShouldNot(BeNil())
+
+			// Check new environment variable
+			stdoutString, stderrString, err = util.ExecuteCommand(cs.CoreV1Interface, kubeConfig, pod.Name, *testNs, pod1stContainerName, "printenv")
+			Expect(err).Should(BeNil())
+			Expect(stderrString).Should(Equal(""))
+			Expect(stdoutString).Should(ContainSubstring("HOSTNAME=" + pod.Name))
+
+			stdoutString, stderrString, err = util.ExecuteCommand(cs.CoreV1Interface, kubeConfig, pod.Name, *testNs, pod1stContainerName, "ls /etc/podnetinfo")
+			Expect(err).Should(BeNil())
+			Expect(stderrString).Should(Equal(""))
+			Expect(stdoutString).ShouldNot(ContainSubstring("hugepages_1G_limit_" + pod1stContainerName))
+			Expect(stdoutString).ShouldNot(ContainSubstring("hugepages_1G_request_" + pod1stContainerName))
+
+			stdoutString, stderrString, err = util.ExecuteCommand(cs.CoreV1Interface, kubeConfig, pod.Name, *testNs, pod1stContainerName, "cat /etc/podnetinfo/hugepages_1G_limit_"+pod1stContainerName)
+			Expect(err).ShouldNot(BeNil())
+
+			stdoutString, stderrString, err = util.ExecuteCommand(cs.CoreV1Interface, kubeConfig, pod.Name, *testNs, pod1stContainerName, "cat /etc/podnetinfo/hugepages_1G_request_"+pod1stContainerName)
+			Expect(err).ShouldNot(BeNil())
 		})
 
 		It("POD with annotation about resourceName, hugepages 2Mi limit and memory size are defined and are equal", func() {
