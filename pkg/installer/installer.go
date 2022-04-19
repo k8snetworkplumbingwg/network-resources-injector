@@ -49,6 +49,7 @@ var (
 
 const keyBitLength = 3072
 const CAExpiration = "630720000s"
+const secretName = "network-resources-injector"
 
 func generateCSR() ([]byte, []byte, error) {
 	glog.Infof("generating Certificate Signing Request")
@@ -267,7 +268,7 @@ func Install(k8sNamespace, namePrefix, failurePolicy string) {
 		glog.Errorf("Failed creating secret: %v", err)
 		// Wait for the secret to be created by the other initContainer and write
 		// key and certificate to file.
-		err = waitForCertDetailsUpdation()
+		err = waitForCertDetailsUpdate()
 		if err != nil {
 			glog.Fatalf("Error occured while waiting for secret creation: %s", err)
 		}
@@ -307,7 +308,7 @@ func createSecret(ctx context.Context, certificate, key []byte, certFilename, ke
 	// with this every new installation will create a new certificate and webhook config.
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:            "network-resources-injector",
+			Name:            secretName,
 			OwnerReferences: []metav1.OwnerReference{*ownerRef},
 		},
 		Data: map[string][]byte{
@@ -352,16 +353,14 @@ func populatePodName() {
 		glog.Fatal(errors.New("pod name not set as environment variable"))
 	}
 	glog.Info("Pod Name set:", podName)
-	// pod, err := clientset.CoreV1().Pods(namespace).Get(context.TODO(), leaseName, metav1.GetOptions{TypeMeta: metav1.TypeMeta{Kind: "Pod", APIVersion: "v1"}})
-
 }
 
-func waitForCertDetailsUpdation() error {
+func waitForCertDetailsUpdate() error {
 	return wait.Poll(5*time.Second, 300*time.Second, writeCertDetailsFromSecret)
 }
 
 func writeCertDetailsFromSecret() (bool, error) {
-	secret, err := clientset.CoreV1().Secrets("kube-system").Get(context.Background(), "network-resources-injector", metav1.GetOptions{})
+	secret, err := clientset.CoreV1().Secrets("kube-system").Get(context.Background(), secretName, metav1.GetOptions{})
 	if err != nil {
 		return false, err
 	}
