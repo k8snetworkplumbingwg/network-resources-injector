@@ -16,9 +16,12 @@ package installer
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"strings"
+	"time"
 
 	"github.com/cloudflare/cfssl/csr"
 	"github.com/cloudflare/cfssl/helpers"
@@ -32,6 +35,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
@@ -40,10 +44,12 @@ var (
 	clientset kubernetes.Interface
 	namespace string
 	prefix    string
+	podName   string
 )
 
 const keyBitLength = 3072
 const CAExpiration = "630720000s"
+const secretName = "network-resources-injector"
 
 func generateCSR() ([]byte, []byte, error) {
 	glog.Infof("generating Certificate Signing Request")
@@ -232,6 +238,7 @@ func Install(k8sNamespace, namePrefix, failurePolicy string) {
 	if err != nil {
 		glog.Fatalf("error setting up Kubernetes client: %s", err)
 	}
+	populatePodName()
 
 	namespace = k8sNamespace
 	prefix = namePrefix
@@ -256,6 +263,19 @@ func Install(k8sNamespace, namePrefix, failurePolicy string) {
 	}
 	glog.Infof("signed certificate successfully obtained")
 
+	if err = createSecret(context.Background(), certificate, key, "tls.crt", "tls.key"); err != nil {
+		// As expected only one initContainer will succeed in creating secret.
+		glog.Errorf("Failed creating secret: %v", err)
+		// Wait for the secret to be created by the other initContainer and write
+		// key and certificate to file.
+		err = waitForCertDetailsUpdate()
+		if err != nil {
+			glog.Fatalf("Error occured while waiting for secret creation: %s", err)
+		}
+		return
+	}
+	glog.Info("Secret created successfully!")
+
 	err = writeToFile(certificate, key, "tls.crt", "tls.key")
 	if err != nil {
 		glog.Fatalf("error writing certificate and key to files: %s", err)
@@ -278,3 +298,82 @@ func Install(k8sNamespace, namePrefix, failurePolicy string) {
 
 	glog.Infof("all resources created successfully")
 }
+
+func createSecret(ctx context.Context, certificate, key []byte, certFilename, keyFilename string) error {
+	ownerRef, err := getOwnerReference()
+	if err != nil {
+		glog.Fatalf("Failed fetching owner reference for the pod:%v", err)
+	}
+	// Set owner reference so that on deleting deployment the secret is also deleted,
+	// with this every new installation will create a new certificate and webhook config.
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            secretName,
+			OwnerReferences: []metav1.OwnerReference{*ownerRef},
+		},
+		Data: map[string][]byte{
+			certFilename: certificate,
+			keyFilename:  key,
+		},
+	}
+	_, err = clientset.CoreV1().Secrets("kube-system").Create(ctx, secret, metav1.CreateOptions{})
+	return err
+}
+
+func getOwnerReference() (*metav1.OwnerReference, error) {
+	b, err := clientset.CoreV1().RESTClient().Get().Resource("pods").
+		Name(podName).Namespace("kube-system").DoRaw(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	var pod corev1.Pod
+	err = json.Unmarshal(b, &pod)
+	if err != nil {
+		glog.Info(err)
+		return nil, err
+	}
+	var ownerRef metav1.OwnerReference
+	for _, owner := range pod.OwnerReferences {
+		if owner.Kind == "ReplicaSet" {
+			ownerRef = metav1.OwnerReference{
+				Kind:       owner.Kind,
+				APIVersion: owner.APIVersion,
+				Name:       owner.Name,
+				UID:        owner.UID,
+			}
+		}
+	}
+	return &ownerRef, nil
+}
+
+func populatePodName() {
+	var isPodNameAvailable bool
+	podName, isPodNameAvailable = os.LookupEnv("POD_NAME")
+	if !isPodNameAvailable {
+		glog.Fatal(errors.New("pod name not set as environment variable"))
+	}
+	glog.Info("Pod Name set:", podName)
+}
+
+func waitForCertDetailsUpdate() error {
+	return wait.Poll(5*time.Second, 300*time.Second, writeCertDetailsFromSecret)
+}
+
+func writeCertDetailsFromSecret() (bool, error) {
+	secret, err := clientset.CoreV1().Secrets("kube-system").Get(context.Background(), secretName, metav1.GetOptions{})
+	if err != nil {
+		return false, err
+	}
+	var tlsKey, tlsCertificate []byte
+	for key, element := range secret.Data {
+		if key == "tls.key" {
+			tlsKey = element
+		} else if key == "tls.crt" {
+			tlsCertificate = element
+		}
+	}
+	writeToFile(tlsCertificate, tlsKey, "tls.crt", "tls.key")
+	glog.Info("Certificate details written to file")
+	return true, nil
+}
+
