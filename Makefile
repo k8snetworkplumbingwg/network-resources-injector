@@ -34,3 +34,6 @@ e2e:
 e2e-clean:
 	source scripts/e2e_get_tools.sh && scripts/e2e_teardown_cluster.sh
 	scripts/e2e_cleanup.sh
+
+deps-update: ; $(info  Updating dependencies...) @ ## Update dependencies
+	@go mod tidy

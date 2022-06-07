@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM golang:1.13-alpine as builder
+FROM golang:1.18.3-alpine as builder
 COPY . /usr/src/network-resources-injector
 WORKDIR /usr/src/network-resources-injector
 RUN apk add --update --virtual build-dependencies build-base bash && \

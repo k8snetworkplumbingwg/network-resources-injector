@@ -153,7 +153,7 @@ retry kubectl -n kube-system wait --for=condition=ready -l name="${CNIS_NAME}" p
 echo "## install NRI"
 retry kubectl create -f "${root}/deployments/auth.yaml"
 # enable HugePage API at webhook
-awk '/-logtostderr/ { print; print "    - -injectHugepageDownApi"; next }1' "${root}/deployments/server.yaml" > "${root}/deployments/server_huge.yaml"
+awk '/-logtostderr/ { print; print "        - -injectHugepageDownApi"; next }1' "${root}/deployments/server.yaml" > "${root}/deployments/server_huge.yaml"
 retry kubectl create -f "${root}/deployments/server_huge.yaml"
 retry kubectl -n kube-system wait --for=condition=ready -l app="${APP_NAME}" pod --timeout=300s
 sleep 5
