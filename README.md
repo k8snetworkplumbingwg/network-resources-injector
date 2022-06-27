@@ -154,6 +154,7 @@ Currently supported arguments are below. If needed, detailed description is avai
 |tls-private-key-file|key.pem|File containing the default x509 private key matching --tls-cert-file.|NO|
 |insecure|false|Disable adding client CA to server TLS endpoint|NO|
 |client-ca|""|File containing client CA. This flag is repeatable if more than one client CA needs to be added to server|NO|
+|health-check-port|8444|The port to use for health check monitoring.|NO|
 |injectHugepageDownApi|false|Enable hugepage requests and limits into Downward API.|YES|
 |network-resource-name-keys|k8s.v1.cni.cncf.io/resourceName|comma separated resource name keys|YES|
 |honor-resources|false|Honor the existing requested resources requests & limits|YES|
