@@ -51,6 +51,7 @@ func main() {
 	key := flag.String("tls-private-key-file", "key.pem", "File containing the default x509 private key matching --tls-cert-file.")
 	insecure := flag.Bool("insecure", false, "Disable adding client CA to server TLS endpoint --insecure")
 	flag.Var(&clientCAPaths, "client-ca", "File containing client CA. This flag is repeatable if more than one client CA needs to be added to server")
+	healthCheckPort := flag.Int("health-check-port", 8444, "The port to use for health check monitoring")
 
 	// do initialization of control switches flags
 	controlSwitches := controlswitches.SetupControlSwitchesFlags()
@@ -62,7 +63,7 @@ func main() {
 	controlSwitches.InitControlSwitches()
 	glog.Infof("controlSwitches: %+v", *controlSwitches)
 
-	if *port < 1024 || *port > 65535 {
+	if !isValidPort(*port) {
 		glog.Fatalf("invalid port number. Choose between 1024 and 65535")
 	}
 
@@ -80,6 +81,25 @@ func main() {
 
 	if namespace = os.Getenv("NAMESPACE"); namespace == "" {
 		namespace = "kube-system"
+	}
+
+	if !isValidPort(*healthCheckPort) {
+		glog.Fatalf("Invalid health check port number. Choose between 1024 and 65535")
+	} else if *healthCheckPort == *port {
+		glog.Fatalf("Health check port should be different from port")
+	} else {
+		go func() {
+			addr := fmt.Sprintf("%s:%d", *address, *healthCheckPort)
+			mux := http.NewServeMux()
+
+			mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			})
+			err := http.ListenAndServe(addr, mux)
+			if err != nil {
+				glog.Fatalf("error starting health check server: %v", err)
+			}
+		}()
 	}
 
 	glog.Infof("starting mutating admission controller for network resources injection")
@@ -216,4 +236,11 @@ func main() {
 
 	// TODO: find a way to stop cache, should we run the above block in a go routine and make main module
 	// to respond to terminate singal ?
+}
+
+func isValidPort(port int) bool {
+	if port < 1024 || port > 65535 {
+		return false
+	}
+	return true
 }

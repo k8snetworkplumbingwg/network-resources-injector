@@ -41,6 +41,7 @@ spec:
         - -port=8443
         - -tls-private-key-file=/etc/tls/tls.key
         - -tls-cert-file=/etc/tls/tls.crt
+        - -health-check-port=8444
         - -logtostderr
         env:
         - name: NAMESPACE
@@ -66,6 +67,12 @@ spec:
           limits:
             memory: "200Mi"
             cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8444
+          initialDelaySeconds: 10
+          periodSeconds: 5
       initContainers:
       - name: installer
         image: network-resources-injector:latest
