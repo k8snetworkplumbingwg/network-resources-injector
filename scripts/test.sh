@@ -21,5 +21,5 @@ root="$(dirname "$0")/.."
 time=$(date +'%Y-%m-%d_%H-%M-%S')
 filePath="/tmp/go-cover.$time.tmp"
 echo "Coverage profile file path: $filePath"
-go test --tags=unittests -coverprofile="$filePath" "./${root}/pkg/..."
+go test --tags=unittests -race -coverprofile="$filePath" "./${root}/pkg/..."
 go tool cover -html="$filePath"
