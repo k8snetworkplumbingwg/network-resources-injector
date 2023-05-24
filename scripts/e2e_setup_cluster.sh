@@ -135,7 +135,7 @@ generate_k8_api_data
 echo "## start Kind cluster with precreated CA key/cert"
 create_cluster
 echo "## remove taints from master node"
-kubectl taint nodes kind-control-plane node-role.kubernetes.io/master:NoSchedule-
+kubectl taint nodes kind-control-plane node-role.kubernetes.io/control-plane:NoSchedule-
 echo "## build NRI"
 retry docker build -t "${APP_DOCKER_TAG}" "${root}"
 echo "## load NRI image into Kind"
