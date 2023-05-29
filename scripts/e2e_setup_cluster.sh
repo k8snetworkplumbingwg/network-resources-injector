@@ -18,7 +18,7 @@ K8_ADDITIONS_PATH="${root}/scripts/control-plane-additions"
 TMP_DIR="${root}/test/tmp"
 MULTUS_DAEMONSET_URL="https://raw.githubusercontent.com/k8snetworkplumbingwg/multus-cni/master/deployments/multus-daemonset.yml"
 MULTUS_NAME="multus"
-CNIS_DAEMONSET_URL="https://raw.githubusercontent.com/k8snetworkplumbingwg/multus-cni/master/e2e/cni-install.yml"
+CNIS_DAEMONSET_URL="https://raw.githubusercontent.com/k8snetworkplumbingwg/multus-cni/master/e2e/templates/cni-install.yml.j2"
 CNIS_NAME="cni-plugins"
 # array with the KinD workers
 KIND_WORKER_NAMES=( kind-worker kind-worker2 )
@@ -135,7 +135,7 @@ generate_k8_api_data
 echo "## start Kind cluster with precreated CA key/cert"
 create_cluster
 echo "## remove taints from master node"
-kubectl taint nodes kind-control-plane node-role.kubernetes.io/master:NoSchedule-
+kubectl taint nodes kind-control-plane node-role.kubernetes.io/control-plane:NoSchedule-
 echo "## build NRI"
 retry docker build -t "${APP_DOCKER_TAG}" "${root}"
 echo "## load NRI image into Kind"
