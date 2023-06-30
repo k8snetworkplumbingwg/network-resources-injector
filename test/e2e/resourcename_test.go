@@ -7,6 +7,7 @@ import (
 
 	cniv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/utils/pointer"
 )
 
 var _ = Describe("Verify that resource and POD which consumes resource cannot be in different namespaces", func() {
@@ -140,6 +141,38 @@ var _ = Describe("Network injection testing", func() {
 		AfterEach(func() {
 			testNamespace := "mysterious"
 			Expect(util.DeleteNamespace(cs.CoreV1Interface, testNamespace, timeout)).Should(BeNil())
+		})
+
+		It("should have one limit injected", func() {
+			limNo, ok := pod.Spec.Containers[0].Resources.Limits[testNetworkResName]
+			Expect(ok).Should(BeTrue())
+			Expect(limNo.String()).Should(Equal("1"))
+		})
+
+		It("should have one request injected", func() {
+			limNo, ok := pod.Spec.Containers[0].Resources.Requests[testNetworkResName]
+			Expect(ok).Should(BeTrue())
+			Expect(limNo.String()).Should(Equal("1"))
+		})
+	})
+
+	Context("one network request and automountServiceAccountToken=false", func() {
+		BeforeEach(func() {
+			nad = util.GetResourceSelectorOnly(testNetworkName, *testNs, testNetworkResName)
+			Expect(util.ApplyNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, nad, timeout)).Should(BeNil())
+
+			pod = util.GetOneNetwork(testNetworkName, *testNs, defaultPodName)
+			pod.Spec.AutomountServiceAccountToken = pointer.Bool(false)
+
+			Expect(util.CreateRunningPod(cs.CoreV1Interface, pod, timeout, interval)).Should(BeNil())
+			Expect(pod.Name).ShouldNot(BeNil())
+			pod, err = util.UpdatePodInfo(cs.CoreV1Interface, pod, timeout)
+			Expect(err).Should(BeNil())
+		})
+
+		AfterEach(func() {
+			_ = util.DeletePod(cs.CoreV1Interface, pod, timeout)
+			Expect(util.DeleteNetworkAttachmentDefinition(networkClient.K8sCniCncfIoV1Interface, testNetworkName, nad, timeout)).Should(BeNil())
 		})
 
 		It("should have one limit injected", func() {

@@ -434,6 +434,15 @@ func patchEmptyResources(patch []types.JsonPatchOperation, containerIndex uint, 
 }
 
 func addVolDownwardAPI(patch []types.JsonPatchOperation, hugepageResourceList []hugepageResourceData, pod *corev1.Pod) []types.JsonPatchOperation {
+
+	if len(pod.Spec.Volumes) == 0 {
+		patch = append(patch, types.JsonPatchOperation{
+			Operation: "add",
+			Path:      "/spec/volumes",
+			Value:     []corev1.Volume{},
+		})
+	}
+
 	dAPIItems := []corev1.DownwardAPIVolumeFile{}
 
 	if pod.Labels != nil && len(pod.Labels) > 0 {
@@ -491,14 +500,21 @@ func addVolDownwardAPI(patch []types.JsonPatchOperation, hugepageResourceList []
 	return patch
 }
 
-func addVolumeMount(patch []types.JsonPatchOperation, containersLen int) []types.JsonPatchOperation {
+func addVolumeMount(patch []types.JsonPatchOperation, containers []corev1.Container) []types.JsonPatchOperation {
 
 	vm := corev1.VolumeMount{
 		Name:      "podnetinfo",
 		ReadOnly:  true,
 		MountPath: types.DownwardAPIMountPath,
 	}
-	for containerIndex := 0; containerIndex < containersLen; containerIndex++ {
+	for containerIndex, container := range containers {
+		if len(container.VolumeMounts) == 0 {
+			patch = append(patch, types.JsonPatchOperation{
+				Operation: "add",
+				Path:      "/spec/containers/" + strconv.Itoa(containerIndex) + "/volumeMounts",
+				Value:     []corev1.VolumeMount{},
+			})
+		}
 		patch = append(patch, types.JsonPatchOperation{
 			Operation: "add",
 			Path:      "/spec/containers/" + strconv.Itoa(containerIndex) + "/volumeMounts/-",
@@ -510,7 +526,7 @@ func addVolumeMount(patch []types.JsonPatchOperation, containersLen int) []types
 }
 
 func createVolPatch(patch []types.JsonPatchOperation, hugepageResourceList []hugepageResourceData, pod *corev1.Pod) []types.JsonPatchOperation {
-	patch = addVolumeMount(patch, len(pod.Spec.Containers))
+	patch = addVolumeMount(patch, pod.Spec.Containers)
 	patch = addVolDownwardAPI(patch, hugepageResourceList, pod)
 	return patch
 }
