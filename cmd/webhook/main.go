@@ -52,6 +52,7 @@ func main() {
 	insecure := flag.Bool("insecure", false, "Disable adding client CA to server TLS endpoint --insecure")
 	flag.Var(&clientCAPaths, "client-ca", "File containing client CA. This flag is repeatable if more than one client CA needs to be added to server")
 	healthCheckPort := flag.Int("health-check-port", 8444, "The port to use for health check monitoring")
+	enableHTTP2 := flag.Bool("enable-http2", false, "If HTTP/2 should be enabled for the webhook server.")
 
 	// do initialization of control switches flags
 	controlSwitches := controlswitches.SetupControlSwitchesFlags()
@@ -168,6 +169,11 @@ func main() {
 				},
 				GetCertificate: keyPair.GetCertificateFunc(),
 			},
+		}
+
+		// CVE-2023-39325 https://github.com/golang/go/issues/63417
+		if !*enableHTTP2 {
+			httpServer.TLSConfig.NextProtos = []string{"http/1.1"}
 		}
 
 		err := httpServer.ListenAndServeTLS("", "")
