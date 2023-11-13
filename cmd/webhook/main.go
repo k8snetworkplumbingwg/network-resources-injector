@@ -169,11 +169,12 @@ func main() {
 				},
 				GetCertificate: keyPair.GetCertificateFunc(),
 			},
+			// CVE-2023-39325 https://github.com/golang/go/issues/63417
+			TLSNextProto: make(map[string]func(*http.Server, *tls.Conn, http.Handler)),
 		}
 
-		// CVE-2023-39325 https://github.com/golang/go/issues/63417
-		if !*enableHTTP2 {
-			httpServer.TLSConfig.NextProtos = []string{"http/1.1"}
+		if *enableHTTP2 {
+			httpServer.TLSNextProto = nil
 		}
 
 		err := httpServer.ListenAndServeTLS("", "")
