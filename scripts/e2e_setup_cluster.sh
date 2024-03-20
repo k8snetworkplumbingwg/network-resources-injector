@@ -101,6 +101,9 @@ create_cluster() {
   # Close fd 3
   exec 3>&-
 
+  # print configuration
+  cat "${PWD}"/kindConfig.yaml
+
   # deploy cluster with kind
   retry kind delete cluster && kind create cluster --config="${PWD}"/kindConfig.yaml
 
