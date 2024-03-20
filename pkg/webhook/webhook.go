@@ -27,7 +27,7 @@ import (
 	"github.com/golang/glog"
 	cniv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	"github.com/pkg/errors"
-	multus "gopkg.in/intel/multus-cni.v3/pkg/types"
+	multus "gopkg.in/k8snetworkplumbingwg/multus-cni.v4/pkg/types"
 
 	admissionv1 "k8s.io/api/admission/v1"
 	v1 "k8s.io/api/apps/v1"
