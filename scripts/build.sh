@@ -26,8 +26,8 @@ fi
 
 export GOPATH=${PWD}/.gopath
 export GOBIN=${PWD}/bin
-export CGO_ENABLED=0
+export CGO_ENABLED=1
 export GO15VENDOREXPERIMENT=1
 
-go install -ldflags "-s -w" -tags no_openssl "$@" ${REPO_PATH}/cmd/installer
-go install -ldflags "-s -w" -tags no_openssl "$@" ${REPO_PATH}/cmd/webhook
+go install -ldflags "-s -w" "$@" ${REPO_PATH}/cmd/installer
+go install -ldflags "-s -w" "$@" ${REPO_PATH}/cmd/webhook
