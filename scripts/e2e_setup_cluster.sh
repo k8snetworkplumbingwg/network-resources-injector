@@ -83,8 +83,6 @@ create_cluster() {
     # Let's print Kind configuration to file to fd 3
     echo "kind: Cluster" >&3
     echo "apiVersion: kind.x-k8s.io/v1alpha4" >&3
-    echo "featureGates:" >&3
-    echo "  DownwardAPIHugePages: true" >&3
     echo "kubeadmConfigPatches:" >&3
     echo "- |" >&3
     echo "  kind: ClusterConfiguration" >&3
