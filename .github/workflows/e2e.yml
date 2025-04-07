@@ -3,7 +3,7 @@ on: [pull_request]
 jobs:
   e2e-test-cloud:
     name: E2E test cloud (GitHub VM)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         go-version: ['1.20', '1.21']

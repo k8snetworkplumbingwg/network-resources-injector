@@ -10,7 +10,7 @@ on:
       - master
 jobs:
   build-and-push-image-nri:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Check out the repo
         uses: actions/checkout@v3
