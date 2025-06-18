@@ -28,4 +28,6 @@ BUILD_ARGS=()
 [ ! -z "$NO_PROXY"    ] && BUILD_ARGS+=("--build-arg NO_PROXY=$NO_PROXY")
 
 # build admission controller Docker image
-docker build ${BUILD_ARGS[@]} -f Dockerfile -t network-resources-injector .
+# Use CONTAINER_ENGINE environment variable if set, otherwise default to docker
+CONTAINER_ENGINE=${CONTAINER_ENGINE:-docker}
+${CONTAINER_ENGINE} build ${BUILD_ARGS[@]} -f Dockerfile -t network-resources-injector .

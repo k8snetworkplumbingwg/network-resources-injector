@@ -18,7 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -58,6 +58,7 @@ const (
 )
 
 var (
+	HugepageRegex         = regexp.MustCompile(`^hugepages-(.+)$`)
 	clientset             kubernetes.Interface
 	nadCache              netcache.NetAttachDefCacheService
 	userDefinedInjections *userdefinedinjections.UserDefinedInjections
@@ -93,7 +94,7 @@ func readAdmissionReview(req *http.Request, w http.ResponseWriter) (*admissionv1
 
 	if req.Body != nil {
 		req.Body = http.MaxBytesReader(w, req.Body, 1<<20)
-		if data, err := ioutil.ReadAll(req.Body); err == nil {
+		if data, err := io.ReadAll(req.Body); err == nil {
 			body = data
 		}
 	}
@@ -136,13 +137,6 @@ func deserializeAdmissionReview(body []byte) (*admissionv1.AdmissionReview, erro
 	}
 
 	return ar, err
-}
-
-func deserializeNetworkAttachmentDefinition(ar *admissionv1.AdmissionReview) (cniv1.NetworkAttachmentDefinition, error) {
-	/* unmarshal NetworkAttachmentDefinition from AdmissionReview request */
-	netAttachDef := cniv1.NetworkAttachmentDefinition{}
-	err := json.Unmarshal(ar.Request.Object.Raw, &netAttachDef)
-	return netAttachDef, err
 }
 
 func deserializePod(ar *admissionv1.AdmissionReview) (corev1.Pod, error) {
@@ -434,7 +428,6 @@ func patchEmptyResources(patch []types.JsonPatchOperation, containerIndex uint, 
 }
 
 func addVolDownwardAPI(patch []types.JsonPatchOperation, hugepageResourceList []hugepageResourceData, pod *corev1.Pod) []types.JsonPatchOperation {
-
 	if len(pod.Spec.Volumes) == 0 {
 		patch = append(patch, types.JsonPatchOperation{
 			Operation: "add",
@@ -501,7 +494,6 @@ func addVolDownwardAPI(patch []types.JsonPatchOperation, hugepageResourceList []
 }
 
 func addVolumeMount(patch []types.JsonPatchOperation, containers []corev1.Container) []types.JsonPatchOperation {
-
 	vm := corev1.VolumeMount{
 		Name:      "podnetinfo",
 		ReadOnly:  true,
@@ -757,6 +749,56 @@ func getNetworkSelections(annotationKey string, pod corev1.Pod, userDefinedPatch
 	return "", false
 }
 
+func processHugepagesForDownwardAPI(patch []types.JsonPatchOperation, containers []corev1.Container) ([]types.JsonPatchOperation, []hugepageResourceData) {
+	var hugepageResourceList []hugepageResourceData
+
+	for containerIndex, container := range containers {
+		found := false
+
+		// Check requests
+		if len(container.Resources.Requests) != 0 {
+			for resourceName, quantity := range container.Resources.Requests {
+				if matches := HugepageRegex.FindStringSubmatch(string(resourceName)); matches != nil && !quantity.IsZero() {
+					hugepageSize := matches[1]
+					hugepageResource := hugepageResourceData{
+						ResourceName:  "requests." + string(resourceName),
+						ContainerName: container.Name,
+						Path:          fmt.Sprintf("hugepages_%s_request_%s", strings.ReplaceAll(hugepageSize, "i", ""), container.Name),
+					}
+					hugepageResourceList = append(hugepageResourceList, hugepageResource)
+					found = true
+				}
+			}
+		}
+
+		// Check limits
+		if len(container.Resources.Limits) != 0 {
+			for resourceName, quantity := range container.Resources.Limits {
+				if matches := HugepageRegex.FindStringSubmatch(string(resourceName)); matches != nil && !quantity.IsZero() {
+					hugepageSize := matches[1]
+					hugepageResource := hugepageResourceData{
+						ResourceName:  "limits." + string(resourceName),
+						ContainerName: container.Name,
+						Path:          fmt.Sprintf("hugepages_%s_limit_%s", strings.ReplaceAll(hugepageSize, "i", ""), container.Name),
+					}
+					hugepageResourceList = append(hugepageResourceList, hugepageResource)
+					found = true
+				}
+			}
+		}
+
+		// If Hugepages are being added to Downward API, add the
+		// 'container.Name' as an environment variable to the container
+		// so container knows its name and can process hugepages properly.
+		if found {
+			patch = createEnvPatch(patch, &container, containerIndex,
+				types.EnvNameContainerName, container.Name)
+		}
+	}
+
+	return patch, hugepageResourceList
+}
+
 // MutateHandler handles AdmissionReview requests and sends responses back to the K8s API server
 func MutateHandler(w http.ResponseWriter, req *http.Request) {
 	glog.Infof("Received mutation request. Features status: %s", controlSwitches.GetAllFeaturesState())
@@ -862,57 +904,7 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 			// and if so, expose the value to the container via Downward API.
 			var hugepageResourceList []hugepageResourceData
 			if controlSwitches.IsHugePagedownAPIEnabled() {
-				for containerIndex, container := range pod.Spec.Containers {
-					found := false
-					if len(container.Resources.Requests) != 0 {
-						if quantity, exists := container.Resources.Requests["hugepages-1Gi"]; exists && quantity.IsZero() == false {
-							hugepageResource := hugepageResourceData{
-								ResourceName:  "requests.hugepages-1Gi",
-								ContainerName: container.Name,
-								Path:          types.Hugepages1GRequestPath + "_" + container.Name,
-							}
-							hugepageResourceList = append(hugepageResourceList, hugepageResource)
-							found = true
-						}
-						if quantity, exists := container.Resources.Requests["hugepages-2Mi"]; exists && quantity.IsZero() == false {
-							hugepageResource := hugepageResourceData{
-								ResourceName:  "requests.hugepages-2Mi",
-								ContainerName: container.Name,
-								Path:          types.Hugepages2MRequestPath + "_" + container.Name,
-							}
-							hugepageResourceList = append(hugepageResourceList, hugepageResource)
-							found = true
-						}
-					}
-					if len(container.Resources.Limits) != 0 {
-						if quantity, exists := container.Resources.Limits["hugepages-1Gi"]; exists && quantity.IsZero() == false {
-							hugepageResource := hugepageResourceData{
-								ResourceName:  "limits.hugepages-1Gi",
-								ContainerName: container.Name,
-								Path:          types.Hugepages1GLimitPath + "_" + container.Name,
-							}
-							hugepageResourceList = append(hugepageResourceList, hugepageResource)
-							found = true
-						}
-						if quantity, exists := container.Resources.Limits["hugepages-2Mi"]; exists && quantity.IsZero() == false {
-							hugepageResource := hugepageResourceData{
-								ResourceName:  "limits.hugepages-2Mi",
-								ContainerName: container.Name,
-								Path:          types.Hugepages2MLimitPath + "_" + container.Name,
-							}
-							hugepageResourceList = append(hugepageResourceList, hugepageResource)
-							found = true
-						}
-					}
-
-					// If Hugepages are being added to Downward API, add the
-					// 'container.Name' as an environment variable to the container
-					// so container knows its name and can process hugepages properly.
-					if found {
-						patch = createEnvPatch(patch, &container, containerIndex,
-							types.EnvNameContainerName, container.Name)
-					}
-				}
+				patch, hugepageResourceList = processHugepagesForDownwardAPI(patch, pod.Spec.Containers)
 			}
 			patch = createVolPatch(patch, hugepageResourceList, &pod)
 			patch = appendUserDefinedPatch(patch, pod, userDefinedPatch)
