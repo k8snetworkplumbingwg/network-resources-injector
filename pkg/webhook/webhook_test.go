@@ -16,17 +16,20 @@ package webhook
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-
-	"gopkg.in/k8snetworkplumbingwg/multus-cni.v4/pkg/types"
-	admissionv1 "k8s.io/api/admission/v1"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+
+	cniv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
+	"gopkg.in/k8snetworkplumbingwg/multus-cni.v4/pkg/types"
+	admissionv1 "k8s.io/api/admission/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/k8snetworkplumbingwg/network-resources-injector/pkg/controlswitches"
 	nritypes "github.com/k8snetworkplumbingwg/network-resources-injector/pkg/types"
@@ -38,6 +41,13 @@ func createBool(value bool) *bool {
 
 func createString(value string) *string {
 	return &value
+}
+
+func deserializeNetworkAttachmentDefinition(ar *admissionv1.AdmissionReview) (cniv1.NetworkAttachmentDefinition, error) {
+	/* unmarshal NetworkAttachmentDefinition from AdmissionReview request */
+	netAttachDef := cniv1.NetworkAttachmentDefinition{}
+	err := json.Unmarshal(ar.Request.Object.Raw, &netAttachDef)
+	return netAttachDef, err
 }
 
 var _ = Describe("Webhook", func() {
@@ -138,6 +148,196 @@ var _ = Describe("Webhook", func() {
 				MutateHandler(w, req)
 				resp := w.Result()
 				Expect(resp.StatusCode).To(Equal(http.StatusUnsupportedMediaType))
+			})
+		})
+	})
+
+	Describe("Dynamic Hugepages Detection", func() {
+		DescribeTable("Hugepage resource name parsing",
+			func(resourceName string, expectedSize string, shouldMatch bool) {
+				matches := HugepageRegex.FindStringSubmatch(resourceName)
+				if shouldMatch {
+					Expect(matches).NotTo(BeNil())
+					Expect(len(matches)).To(Equal(2))
+					Expect(matches[1]).To(Equal(expectedSize))
+				} else {
+					Expect(matches).To(BeNil())
+				}
+			},
+			Entry("1Gi hugepages", "hugepages-1Gi", "1Gi", true),
+			Entry("2Mi hugepages", "hugepages-2Mi", "2Mi", true),
+			Entry("1Mi hugepages", "hugepages-1Mi", "1Mi", true),
+			Entry("512Ki hugepages", "hugepages-512Ki", "512Ki", true),
+			Entry("4Gi hugepages", "hugepages-4Gi", "4Gi", true),
+			Entry("non-hugepage resource", "intel.com/sriov", "", false),
+			Entry("malformed hugepage", "hugepage-1Gi", "", false),
+			Entry("empty string", "", "", false),
+		)
+	})
+
+	Describe("Hugepage Detection Logic", func() {
+		Context("Container with hugepage requests", func() {
+			It("should detect 1Gi hugepage requests", func() {
+				container := corev1.Container{
+					Name: "test-container",
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							"hugepages-1Gi": resource.MustParse("2Gi"),
+						},
+					},
+				}
+				containers := []corev1.Container{container}
+				initialPatch := []nritypes.JsonPatchOperation{}
+
+				updatedPatch, hugepageResourceList := processHugepagesForDownwardAPI(initialPatch, containers)
+
+				Expect(len(hugepageResourceList)).To(Equal(1))
+				Expect(hugepageResourceList[0].ResourceName).To(Equal("requests.hugepages-1Gi"))
+				Expect(hugepageResourceList[0].ContainerName).To(Equal("test-container"))
+				Expect(hugepageResourceList[0].Path).To(Equal("hugepages_1G_request_test-container"))
+				// Verify that environment variable patch was added
+				Expect(len(updatedPatch)).To(BeNumerically(">", 0))
+			})
+
+			It("should detect multiple hugepage sizes", func() {
+				container := corev1.Container{
+					Name: "multi-hugepage-container",
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							"hugepages-1Gi":   resource.MustParse("2Gi"),
+							"hugepages-2Mi":   resource.MustParse("1024Mi"),
+							"hugepages-1Mi":   resource.MustParse("512Mi"),
+							"hugepages-512Ki": resource.MustParse("256Mi"),
+						},
+					},
+				}
+
+				containers := []corev1.Container{container}
+				initialPatch := []nritypes.JsonPatchOperation{}
+
+				_, hugepageResourceList := processHugepagesForDownwardAPI(initialPatch, containers)
+				Expect(len(hugepageResourceList)).To(Equal(4))
+
+				// Verify all hugepage sizes are detected
+				resourceNames := make([]string, len(hugepageResourceList))
+				for i, hp := range hugepageResourceList {
+					resourceNames[i] = hp.ResourceName
+				}
+				Expect(resourceNames).To(ContainElements(
+					"requests.hugepages-1Gi",
+					"requests.hugepages-2Mi",
+					"requests.hugepages-1Mi",
+					"requests.hugepages-512Ki",
+				))
+			})
+
+			It("should ignore zero-valued hugepage requests", func() {
+				container := corev1.Container{
+					Name: "zero-hugepage-container",
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							"hugepages-1Gi": resource.MustParse("0"),
+						},
+					},
+				}
+
+				containers := []corev1.Container{container}
+				initialPatch := []nritypes.JsonPatchOperation{}
+
+				_, hugepageResourceList := processHugepagesForDownwardAPI(initialPatch, containers)
+				Expect(len(hugepageResourceList)).To(Equal(0))
+			})
+		})
+
+		Context("Container with hugepage limits", func() {
+			It("should detect hugepage limits", func() {
+				container := corev1.Container{
+					Name: "limit-container",
+					Resources: corev1.ResourceRequirements{
+						Limits: corev1.ResourceList{
+							"hugepages-2Mi": resource.MustParse("1Gi"),
+							"hugepages-4Gi": resource.MustParse("8Gi"),
+						},
+					},
+				}
+
+				containers := []corev1.Container{container}
+				initialPatch := []nritypes.JsonPatchOperation{}
+
+				_, hugepageResourceList := processHugepagesForDownwardAPI(initialPatch, containers)
+				Expect(len(hugepageResourceList)).To(Equal(2))
+
+				// Check both limits are detected
+				resourceNames := make([]string, len(hugepageResourceList))
+				paths := make([]string, len(hugepageResourceList))
+				for i, hp := range hugepageResourceList {
+					resourceNames[i] = hp.ResourceName
+					paths[i] = hp.Path
+				}
+				Expect(resourceNames).To(ContainElements(
+					"limits.hugepages-2Mi",
+					"limits.hugepages-4Gi",
+				))
+				Expect(paths).To(ContainElements(
+					"hugepages_2M_limit_limit-container",
+					"hugepages_4G_limit_limit-container",
+				))
+			})
+		})
+
+		Context("Container with both requests and limits", func() {
+			It("should detect both requests and limits", func() {
+				container := corev1.Container{
+					Name: "both-container",
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							"hugepages-1Gi": resource.MustParse("2Gi"),
+						},
+						Limits: corev1.ResourceList{
+							"hugepages-1Gi": resource.MustParse("2Gi"),
+							"hugepages-2Mi": resource.MustParse("1Gi"),
+						},
+					},
+				}
+
+				containers := []corev1.Container{container}
+				initialPatch := []nritypes.JsonPatchOperation{}
+
+				_, hugepageResourceList := processHugepagesForDownwardAPI(initialPatch, containers)
+				Expect(len(hugepageResourceList)).To(Equal(3))
+
+				// Verify all are detected
+				resourceNames := make([]string, len(hugepageResourceList))
+				for i, hp := range hugepageResourceList {
+					resourceNames[i] = hp.ResourceName
+				}
+				Expect(resourceNames).To(ContainElements(
+					"requests.hugepages-1Gi",
+					"limits.hugepages-1Gi",
+					"limits.hugepages-2Mi",
+				))
+			})
+		})
+
+		Context("Container with non-hugepage resources", func() {
+			It("should ignore non-hugepage resources", func() {
+				container := corev1.Container{
+					Name: "non-hugepage-container",
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							"intel.com/sriov": resource.MustParse("1"),
+							"memory":          resource.MustParse("1Gi"),
+							"cpu":             resource.MustParse("500m"),
+							"nvidia.com/gpu":  resource.MustParse("1"),
+						},
+					},
+				}
+
+				containers := []corev1.Container{container}
+				initialPatch := []nritypes.JsonPatchOperation{}
+
+				_, hugepageResourceList := processHugepagesForDownwardAPI(initialPatch, containers)
+				Expect(len(hugepageResourceList)).To(Equal(0))
 			})
 		})
 	})

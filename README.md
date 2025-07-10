@@ -1,19 +1,19 @@
-* [Network Resources Injector](#network-resources-injector)
-   * [Getting started](#getting-started)
-   * [Network resources injection example](#network-resources-injection-example)
-   * [Vendoring](#vendoring)
-   * [Security](#security)
-      * [Disable adding client CAs to server TLS endpoint](#disable-adding-client-cas-to-server-tls-endpoint)
-      * [Client CAs](#client-cas)
-   * [Additional features](#additional-features)
-      * [Features control switches](#features-control-switches)
-      * [Expose Hugepages via Downward API](#expose-hugepages-via-downward-api)
-      * [Node Selector](#node-selector)
-      * [User Defined Injections](#user-defined-injections)
-   * [Test](#test)
-      * [Unit tests](#unit-tests)
-      * [E2E tests using Kubernetes in Docker (KinD)](#e2e-tests-using-kubernetes-in-docker-kind)
-   * [Contact Us](#contact-us)
+- [Network Resources Injector](#network-resources-injector)
+  - [Getting started](#getting-started)
+  - [Network resources injection example](#network-resources-injection-example)
+  - [Vendoring](#vendoring)
+  - [Security](#security)
+    - [Disable adding client CAs to server TLS endpoint](#disable-adding-client-cas-to-server-tls-endpoint)
+    - [Client CAs](#client-cas)
+  - [Additional features](#additional-features)
+    - [Features control switches](#features-control-switches)
+    - [Expose Hugepages via Downward API](#expose-hugepages-via-downward-api)
+    - [Node Selector](#node-selector)
+    - [User Defined Injections](#user-defined-injections)
+  - [Test](#test)
+    - [Unit tests](#unit-tests)
+    - [E2E tests using Kubernetes in Docker (KinD)](#e2e-tests-using-kubernetes-in-docker-kind)
+  - [Contact Us](#contact-us)
 
 # Network Resources Injector
 
@@ -203,7 +203,9 @@ spec:
 ```
 
 Like the other Downward API provided data, hugepage information for a pod can be located by an application at the path `/etc/podnetinfo/` in the container's file system.
-This directory will contain the request and limit information for 1Gi/2Mb.
+This directory will contain the request and limit information for any size of hugepages allocated by kubernetes.
+
+For example:
 
 1Gi Hugepages:
 ```
