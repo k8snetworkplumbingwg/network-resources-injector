@@ -18,7 +18,7 @@ WORKDIR /usr/src/network-resources-injector
 RUN apk add --update --virtual build-dependencies build-base bash && \
     make
 
-FROM alpine:3.11
+FROM alpine:3.22
 USER 1001
 COPY --from=builder /usr/src/network-resources-injector/bin/webhook /usr/bin/
 COPY --from=builder /usr/src/network-resources-injector/bin/installer /usr/bin/
