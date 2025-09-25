@@ -121,7 +121,7 @@ func main() {
 	// initialize webhook with controlSwitches
 	webhook.SetControlSwitches(controlSwitches)
 
-	//initialize webhook with cache
+	// initialize webhook with cache
 	netAnnotationCache := netcache.Create()
 	netAnnotationCache.Start()
 	webhook.SetNetAttachDefCache(netAnnotationCache)
@@ -192,11 +192,10 @@ func main() {
 
 	certUpdated := false
 	keyUpdated := false
+	watcher.Add(*cert)
+	watcher.Add(*key)
 
 	for {
-		watcher.Add(*cert)
-		watcher.Add(*key)
-
 		select {
 		case event, ok := <-watcher.Events:
 			if !ok {
@@ -209,9 +208,11 @@ func main() {
 				glog.V(2).Infof("modified file: %v", event.Name)
 				if event.Name == *cert {
 					certUpdated = true
+					watcher.Add(*cert)
 				}
 				if event.Name == *key {
 					keyUpdated = true
+					watcher.Add(*key)
 				}
 				if keyUpdated && certUpdated {
 					if err := keyPair.Reload(); err != nil {
