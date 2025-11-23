@@ -11,9 +11,9 @@ require (
 	github.com/onsi/gomega v1.38.0
 	github.com/pkg/errors v0.9.1
 	gopkg.in/k8snetworkplumbingwg/multus-cni.v4 v4.2.3
-	k8s.io/api v0.33.5
-	k8s.io/apimachinery v0.33.5
-	k8s.io/client-go v0.33.5
+	k8s.io/api v0.33.6
+	k8s.io/apimachinery v0.33.6
+	k8s.io/client-go v0.33.6
 	k8s.io/utils v0.0.0-20250604170112-4c0f3b243397
 )
 
