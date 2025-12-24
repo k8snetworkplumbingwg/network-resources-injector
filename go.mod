@@ -8,7 +8,7 @@ require (
 	github.com/golang/glog v1.2.5
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.7.7
 	github.com/onsi/ginkgo v1.16.5
-	github.com/onsi/gomega v1.38.0
+	github.com/onsi/gomega v1.38.3
 	github.com/pkg/errors v0.9.1
 	gopkg.in/k8snetworkplumbingwg/multus-cni.v4 v4.2.3
 	k8s.io/api v0.33.6
@@ -58,7 +58,7 @@ require (
 	golang.org/x/term v0.37.0 // indirect
 	golang.org/x/text v0.31.0 // indirect
 	golang.org/x/time v0.12.0 // indirect
-	google.golang.org/protobuf v1.36.6 // indirect
+	google.golang.org/protobuf v1.36.7 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
