@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build unittests
 // +build unittests
 
 // This file should be only include in build system during unit tests execution.

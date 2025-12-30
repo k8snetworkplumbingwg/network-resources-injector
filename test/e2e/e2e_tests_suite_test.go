@@ -8,13 +8,14 @@ import (
 	"time"
 
 	networkCoreClient "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/client/clientset/versioned/typed/k8s.cni.cncf.io/v1"
-	"github.com/k8snetworkplumbingwg/network-resources-injector/test/util"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	coreclient "k8s.io/client-go/kubernetes/typed/core/v1"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
+
+	"github.com/k8snetworkplumbingwg/network-resources-injector/test/util"
 )
 
 const (
