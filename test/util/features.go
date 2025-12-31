@@ -14,7 +14,7 @@ const (
 	hugepagesResouceName1Gi  = "hugepages-1Gi"
 )
 
-//IsMinHugepagesAvailable checks if a min Gi/Mi hugepage number is available on any nodes
+// IsMinHugepagesAvailable checks if a min Gi/Mi hugepage number is available on any nodes
 func IsMinHugepagesAvailable(ci coreclient.CoreV1Interface, minGi, minMi int) (bool, error) {
 	hugepages := map[string]int{hugepagesResouceName1Gi: minGi, hugepagesResourceName2Mi: minMi}
 	list, err := ci.Nodes().List(context.Background(), metav1.ListOptions{})

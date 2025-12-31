@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 	"time"
@@ -90,10 +89,10 @@ func generateCACertificate() (*local.Signer, []byte, error) {
 }
 
 func writeToFile(certificate, key []byte, certFilename, keyFilename string) error {
-	if err := ioutil.WriteFile("/etc/tls/"+certFilename, certificate, 0400); err != nil {
+	if err := os.WriteFile("/etc/tls/"+certFilename, certificate, 0400); err != nil {
 		return err
 	}
-	if err := ioutil.WriteFile("/etc/tls/"+keyFilename, key, 0400); err != nil {
+	if err := os.WriteFile("/etc/tls/"+keyFilename, key, 0400); err != nil {
 		return err
 	}
 	return nil
@@ -134,7 +133,7 @@ func createMutatingWebhookConfiguration(certificate []byte, failurePolicyStr str
 			},
 		},
 		Webhooks: []arv1.MutatingWebhook{
-			arv1.MutatingWebhook{
+			{
 				Name: configName + ".k8s.cni.cncf.io",
 				ClientConfig: arv1.WebhookClientConfig{
 					CABundle: certificate,
@@ -149,7 +148,7 @@ func createMutatingWebhookConfiguration(certificate []byte, failurePolicyStr str
 				SideEffects:             &sideEffects,
 				NamespaceSelector:       &namespaceSelector,
 				Rules: []arv1.RuleWithOperations{
-					arv1.RuleWithOperations{
+					{
 						Operations: []arv1.OperationType{arv1.Create},
 						Rule: arv1.Rule{
 							APIGroups:   []string{""},
@@ -177,7 +176,7 @@ func createService() error {
 		},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
-				corev1.ServicePort{
+				{
 					Port:       443,
 					TargetPort: intstr.FromInt(8443),
 				},
@@ -212,18 +211,6 @@ func removeMutatingWebhookIfExists(configName string) {
 			glog.Errorf("error trying to remove mutating webhook configuration: %s", err)
 		}
 		glog.Infof("mutating webhook configuration %s removed", configName)
-	}
-}
-
-func removeSecretIfExists(secretName string) {
-	secret, err := clientset.CoreV1().Secrets(namespace).Get(context.TODO(), secretName, metav1.GetOptions{})
-	if secret != nil && err == nil {
-		glog.Infof("secret %s already exists, removing it first", secretName)
-		err := clientset.CoreV1().Secrets(namespace).Delete(context.TODO(), secretName, metav1.DeleteOptions{})
-		if err != nil {
-			glog.Errorf("error trying to remove secret: %s", err)
-		}
-		glog.Infof("secret %s removed", secretName)
 	}
 }
 
@@ -270,7 +257,7 @@ func Install(k8sNamespace, namePrefix, failurePolicy string) {
 		// key and certificate to file.
 		err = waitForCertDetailsUpdate()
 		if err != nil {
-			glog.Fatalf("Error occured while waiting for secret creation: %s", err)
+			glog.Fatalf("Error occurred while waiting for secret creation: %s", err)
 		}
 		return
 	}
@@ -356,11 +343,15 @@ func populatePodName() {
 }
 
 func waitForCertDetailsUpdate() error {
-	return wait.Poll(5*time.Second, 300*time.Second, writeCertDetailsFromSecret)
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
+	defer cancel()
+	return wait.PollUntilContextTimeout(ctx, 5*time.Second, 300*time.Second, true, func(ctx context.Context) (bool, error) {
+		return writeCertDetailsFromSecret(ctx)
+	})
 }
 
-func writeCertDetailsFromSecret() (bool, error) {
-	secret, err := clientset.CoreV1().Secrets("kube-system").Get(context.Background(), secretName, metav1.GetOptions{})
+func writeCertDetailsFromSecret(ctx context.Context) (bool, error) {
+	secret, err := clientset.CoreV1().Secrets("kube-system").Get(ctx, secretName, metav1.GetOptions{})
 	if err != nil {
 		return false, err
 	}
@@ -376,4 +367,3 @@ func writeCertDetailsFromSecret() (bool, error) {
 	glog.Info("Certificate details written to file")
 	return true, nil
 }
-

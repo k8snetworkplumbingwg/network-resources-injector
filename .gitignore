@@ -90,3 +90,6 @@ $RECYCLE.BIN/
 
 # End of https://www.gitignore.io/api/go,macos,linux,windows,visualstudiocode
 /test/tmp/*
+
+/build/
+

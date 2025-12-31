@@ -55,6 +55,8 @@ const (
 	networksAnnotationKey       = "k8s.v1.cni.cncf.io/networks"
 	nodeSelectorKey             = "k8s.v1.cni.cncf.io/nodeSelector"
 	defaultNetworkAnnotationKey = "v1.multus-cni.io/default-network"
+	metadataAnnotationsPath     = "/metadata/annotations"
+	patchOperationAdd           = "add"
 )
 
 var (
@@ -154,7 +156,7 @@ func deserializePod(ar *admissionv1.AdmissionReview) (corev1.Pod, error) {
 	}
 
 	ownerRef := pod.ObjectMeta.OwnerReferences
-	if ownerRef != nil && len(ownerRef) > 0 {
+	if len(ownerRef) > 0 {
 		namespace, err := getNamespaceFromOwnerReference(pod.ObjectMeta.OwnerReferences[0])
 		if err != nil {
 			return pod, err
@@ -234,12 +236,11 @@ func getNamespaceFromOwnerReference(ownerRef metav1.OwnerReference) (namespace s
 	}
 
 	return
-
 }
 
-func toSafeJsonPatchKey(in string) string {
-	out := strings.Replace(in, "~", "~0", -1)
-	out = strings.Replace(out, "/", "~1", -1)
+func toSafeJSONPatchKey(in string) string {
+	out := strings.ReplaceAll(in, "~", "~0")
+	out = strings.ReplaceAll(out, "/", "~1")
 	return out
 }
 
@@ -277,7 +278,7 @@ func parsePodNetworkSelections(podNetworks, defaultNamespace string) ([]*multus.
 				// Ignore the AdmissionReview request when the following conditions are met:
 				// 1) net-attach-def annotation doesn't contain a valid namespace
 				// 2) defaultNamespace retrieved from admission request is empty
-				// Pod admission would fail in subsquent call "getNetworkAttachmentDefinition"
+				// Pod admission would fail in subsequent call "getNetworkAttachmentDefinition"
 				// if no namespace is specified. We don't want to fail the pod creation
 				// in such case since it is possible that pod is not a SR-IOV pod
 				glog.Warningf("The admission request doesn't contain a valid namespace, ignoring...")
@@ -418,18 +419,18 @@ func writeResponse(w http.ResponseWriter, ar *admissionv1.AdmissionReview) {
 	w.Write(resp)
 }
 
-func patchEmptyResources(patch []types.JsonPatchOperation, containerIndex uint, key string) []types.JsonPatchOperation {
-	patch = append(patch, types.JsonPatchOperation{
+func patchEmptyResources(patch []types.JSONPatchOperation, containerIndex uint, key string) []types.JSONPatchOperation {
+	patch = append(patch, types.JSONPatchOperation{
 		Operation: "add",
-		Path:      "/spec/containers/" + fmt.Sprintf("%d", containerIndex) + "/resources/" + toSafeJsonPatchKey(key),
+		Path:      "/spec/containers/" + fmt.Sprintf("%d", containerIndex) + "/resources/" + toSafeJSONPatchKey(key),
 		Value:     corev1.ResourceList{},
 	})
 	return patch
 }
 
-func addVolDownwardAPI(patch []types.JsonPatchOperation, hugepageResourceList []hugepageResourceData, pod *corev1.Pod) []types.JsonPatchOperation {
+func addVolDownwardAPI(patch []types.JSONPatchOperation, hugepageResourceList []hugepageResourceData, pod *corev1.Pod) []types.JSONPatchOperation {
 	if len(pod.Spec.Volumes) == 0 {
-		patch = append(patch, types.JsonPatchOperation{
+		patch = append(patch, types.JSONPatchOperation{
 			Operation: "add",
 			Path:      "/spec/volumes",
 			Value:     []corev1.Volume{},
@@ -438,7 +439,7 @@ func addVolDownwardAPI(patch []types.JsonPatchOperation, hugepageResourceList []
 
 	dAPIItems := []corev1.DownwardAPIVolumeFile{}
 
-	if pod.Labels != nil && len(pod.Labels) > 0 {
+	if len(pod.Labels) > 0 {
 		labels := corev1.ObjectFieldSelector{
 			FieldPath: "metadata.labels",
 		}
@@ -449,7 +450,7 @@ func addVolDownwardAPI(patch []types.JsonPatchOperation, hugepageResourceList []
 		dAPIItems = append(dAPIItems, dAPILabels)
 	}
 
-	if pod.Annotations != nil && len(pod.Annotations) > 0 {
+	if len(pod.Annotations) > 0 {
 		annotations := corev1.ObjectFieldSelector{
 			FieldPath: "metadata.annotations",
 		}
@@ -484,7 +485,7 @@ func addVolDownwardAPI(patch []types.JsonPatchOperation, hugepageResourceList []
 		VolumeSource: volSource,
 	}
 
-	patch = append(patch, types.JsonPatchOperation{
+	patch = append(patch, types.JSONPatchOperation{
 		Operation: "add",
 		Path:      "/spec/volumes/-",
 		Value:     vol,
@@ -493,7 +494,7 @@ func addVolDownwardAPI(patch []types.JsonPatchOperation, hugepageResourceList []
 	return patch
 }
 
-func addVolumeMount(patch []types.JsonPatchOperation, containers []corev1.Container) []types.JsonPatchOperation {
+func addVolumeMount(patch []types.JSONPatchOperation, containers []corev1.Container) []types.JSONPatchOperation {
 	vm := corev1.VolumeMount{
 		Name:      "podnetinfo",
 		ReadOnly:  true,
@@ -501,13 +502,13 @@ func addVolumeMount(patch []types.JsonPatchOperation, containers []corev1.Contai
 	}
 	for containerIndex, container := range containers {
 		if len(container.VolumeMounts) == 0 {
-			patch = append(patch, types.JsonPatchOperation{
+			patch = append(patch, types.JSONPatchOperation{
 				Operation: "add",
 				Path:      "/spec/containers/" + strconv.Itoa(containerIndex) + "/volumeMounts",
 				Value:     []corev1.VolumeMount{},
 			})
 		}
-		patch = append(patch, types.JsonPatchOperation{
+		patch = append(patch, types.JSONPatchOperation{
 			Operation: "add",
 			Path:      "/spec/containers/" + strconv.Itoa(containerIndex) + "/volumeMounts/-",
 			Value:     vm,
@@ -517,28 +518,27 @@ func addVolumeMount(patch []types.JsonPatchOperation, containers []corev1.Contai
 	return patch
 }
 
-func createVolPatch(patch []types.JsonPatchOperation, hugepageResourceList []hugepageResourceData, pod *corev1.Pod) []types.JsonPatchOperation {
+func createVolPatch(patch []types.JSONPatchOperation, hugepageResourceList []hugepageResourceData, pod *corev1.Pod) []types.JSONPatchOperation {
 	patch = addVolumeMount(patch, pod.Spec.Containers)
 	patch = addVolDownwardAPI(patch, hugepageResourceList, pod)
 	return patch
 }
 
-func addEnvVar(patch []types.JsonPatchOperation, containerIndex int, firstElement bool,
-	envName string, envVal string) []types.JsonPatchOperation {
-
+func addEnvVar(patch []types.JSONPatchOperation, containerIndex int, firstElement bool,
+	envName string, envVal string) []types.JSONPatchOperation {
 	env := corev1.EnvVar{
 		Name:  envName,
 		Value: envVal,
 	}
 
 	if firstElement {
-		patch = append(patch, types.JsonPatchOperation{
+		patch = append(patch, types.JSONPatchOperation{
 			Operation: "add",
 			Path:      "/spec/containers/" + fmt.Sprintf("%d", containerIndex) + "/env",
 			Value:     []corev1.EnvVar{env},
 		})
 	} else {
-		patch = append(patch, types.JsonPatchOperation{
+		patch = append(patch, types.JSONPatchOperation{
 			Operation: "add",
 			Path:      "/spec/containers/" + fmt.Sprintf("%d", containerIndex) + "/env/-",
 			Value:     env,
@@ -548,9 +548,8 @@ func addEnvVar(patch []types.JsonPatchOperation, containerIndex int, firstElemen
 	return patch
 }
 
-func createEnvPatch(patch []types.JsonPatchOperation, container *corev1.Container,
-	containerIndex int, envName string, envVal string) []types.JsonPatchOperation {
-
+func createEnvPatch(patch []types.JSONPatchOperation, container *corev1.Container,
+	containerIndex int, envName string, envVal string) []types.JSONPatchOperation {
 	// Determine if requested ENV already exists
 	found := false
 	firstElement := false
@@ -575,22 +574,18 @@ func createEnvPatch(patch []types.JsonPatchOperation, container *corev1.Containe
 	return patch
 }
 
-func createNodeSelectorPatch(patch []types.JsonPatchOperation, existing map[string]string, desired map[string]string) []types.JsonPatchOperation {
+func createNodeSelectorPatch(patch []types.JSONPatchOperation, existing map[string]string, desired map[string]string) []types.JSONPatchOperation {
 	targetMap := make(map[string]string)
-	if existing != nil {
-		for k, v := range existing {
-			targetMap[k] = v
-		}
+	for k, v := range existing {
+		targetMap[k] = v
 	}
-	if desired != nil {
-		for k, v := range desired {
-			targetMap[k] = v
-		}
+	for k, v := range desired {
+		targetMap[k] = v
 	}
 	if len(targetMap) == 0 {
 		return patch
 	}
-	patch = append(patch, types.JsonPatchOperation{
+	patch = append(patch, types.JSONPatchOperation{
 		Operation: "add",
 		Path:      "/spec/nodeSelector",
 		Value:     targetMap,
@@ -598,7 +593,7 @@ func createNodeSelectorPatch(patch []types.JsonPatchOperation, existing map[stri
 	return patch
 }
 
-func createResourcePatch(patch []types.JsonPatchOperation, Containers []corev1.Container, resourceRequests map[string]int64) []types.JsonPatchOperation {
+func createResourcePatch(patch []types.JSONPatchOperation, Containers []corev1.Container, resourceRequests map[string]int64) []types.JSONPatchOperation {
 	/* check whether resources paths exists in the first container and add as the first patches if missing */
 	if len(Containers[0].Resources.Requests) == 0 {
 		patch = patchEmptyResources(patch, 0, "requests")
@@ -627,7 +622,7 @@ func createResourcePatch(patch []types.JsonPatchOperation, Containers []corev1.C
 	return patch
 }
 
-func updateResourcePatch(patch []types.JsonPatchOperation, Containers []corev1.Container, resourceRequests map[string]int64) []types.JsonPatchOperation {
+func updateResourcePatch(patch []types.JSONPatchOperation, Containers []corev1.Container, resourceRequests map[string]int64) []types.JSONPatchOperation {
 	var existingrequestsMap map[corev1.ResourceName]resource.Quantity
 	var existingLimitsMap map[corev1.ResourceName]resource.Quantity
 
@@ -659,15 +654,15 @@ func updateResourcePatch(patch []types.JsonPatchOperation, Containers []corev1.C
 	return patch
 }
 
-func appendResource(patch []types.JsonPatchOperation, resourceName string, reqQuantity, limitQuantity resource.Quantity) []types.JsonPatchOperation {
-	patch = append(patch, types.JsonPatchOperation{
+func appendResource(patch []types.JSONPatchOperation, resourceName string, reqQuantity, limitQuantity resource.Quantity) []types.JSONPatchOperation {
+	patch = append(patch, types.JSONPatchOperation{
 		Operation: "add",
-		Path:      "/spec/containers/0/resources/requests/" + toSafeJsonPatchKey(resourceName),
+		Path:      "/spec/containers/0/resources/requests/" + toSafeJSONPatchKey(resourceName),
 		Value:     reqQuantity,
 	})
-	patch = append(patch, types.JsonPatchOperation{
+	patch = append(patch, types.JSONPatchOperation{
 		Operation: "add",
-		Path:      "/spec/containers/0/resources/limits/" + toSafeJsonPatchKey(resourceName),
+		Path:      "/spec/containers/0/resources/limits/" + toSafeJSONPatchKey(resourceName),
 		Value:     limitQuantity,
 	})
 
@@ -683,16 +678,16 @@ func getResourceList(resourceRequests map[string]int64) *corev1.ResourceList {
 	return &resourceList
 }
 
-func appendAddAnnotPatch(patch []types.JsonPatchOperation, pod corev1.Pod, userDefinedPatch []types.JsonPatchOperation) []types.JsonPatchOperation {
+func appendAddAnnotPatch(patch []types.JSONPatchOperation, pod corev1.Pod, userDefinedPatch []types.JSONPatchOperation) []types.JSONPatchOperation {
 	annotations := make(map[string]string)
-	patchOp := types.JsonPatchOperation{
+	patchOp := types.JSONPatchOperation{
 		Operation: "add",
-		Path:      "/metadata/annotations",
+		Path:      metadataAnnotationsPath,
 		Value:     annotations,
 	}
 
 	for _, p := range userDefinedPatch {
-		if p.Path == "/metadata/annotations" && p.Operation == "add" {
+		if p.Path == metadataAnnotationsPath && p.Operation == patchOperationAdd {
 			//loop over user defined injected annotations key-value pairs
 			for k, v := range p.Value.(map[string]interface{}) {
 				if _, exists := annotations[k]; exists {
@@ -717,12 +712,12 @@ func appendAddAnnotPatch(patch []types.JsonPatchOperation, pod corev1.Pod, userD
 	return patch
 }
 
-func appendUserDefinedPatch(patch []types.JsonPatchOperation, pod corev1.Pod, userDefinedPatch []types.JsonPatchOperation) []types.JsonPatchOperation {
+func appendUserDefinedPatch(patch []types.JSONPatchOperation, pod corev1.Pod, userDefinedPatch []types.JSONPatchOperation) []types.JSONPatchOperation {
 	//Add operation for annotations is currently only supported
 	return appendAddAnnotPatch(patch, pod, userDefinedPatch)
 }
 
-func getNetworkSelections(annotationKey string, pod corev1.Pod, userDefinedPatch []types.JsonPatchOperation) (string, bool) {
+func getNetworkSelections(annotationKey string, pod corev1.Pod, userDefinedPatch []types.JSONPatchOperation) (string, bool) {
 	// User defined annotateKey takes precedence than userDefined injections
 	glog.Infof("search %s in original pod annotations", annotationKey)
 	nets, exists := pod.ObjectMeta.Annotations[annotationKey]
@@ -735,7 +730,7 @@ func getNetworkSelections(annotationKey string, pod corev1.Pod, userDefinedPatch
 	// userDefinedPatch may contain user defined net-attach-defs
 	if len(userDefinedPatch) > 0 {
 		for _, p := range userDefinedPatch {
-			if p.Operation == "add" && p.Path == "/metadata/annotations" {
+			if p.Operation == patchOperationAdd && p.Path == metadataAnnotationsPath {
 				for k, v := range p.Value.(map[string]interface{}) {
 					if k == annotationKey {
 						glog.Infof("%s is found in user-defined annotations", annotationKey)
@@ -749,7 +744,7 @@ func getNetworkSelections(annotationKey string, pod corev1.Pod, userDefinedPatch
 	return "", false
 }
 
-func processHugepagesForDownwardAPI(patch []types.JsonPatchOperation, containers []corev1.Container) ([]types.JsonPatchOperation, []hugepageResourceData) {
+func processHugepagesForDownwardAPI(patch []types.JSONPatchOperation, containers []corev1.Container) ([]types.JSONPatchOperation, []hugepageResourceData) {
 	var hugepageResourceList []hugepageResourceData
 
 	for containerIndex, container := range containers {
@@ -890,7 +885,7 @@ func MutateHandler(w http.ResponseWriter, req *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		var patch []types.JsonPatchOperation
+		var patch []types.JSONPatchOperation
 		if len(resourceRequests) == 0 {
 			glog.Infof("pod %s/%s doesn't need any custom network resources", pod.ObjectMeta.Namespace, pod.ObjectMeta.Name)
 		} else {

@@ -5,9 +5,10 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/k8snetworkplumbingwg/network-resources-injector/test/util"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
+	"github.com/k8snetworkplumbingwg/network-resources-injector/test/util"
 
 	cniv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	corev1 "k8s.io/api/core/v1"

@@ -21,7 +21,7 @@ func init() {
 	}
 }
 
-//GetPodTestImage returns image to be used during testing
+// GetPodTestImage returns image to be used during testing
 func GetPodTestImage() string {
 	return fmt.Sprintf("%s/%s", registry, testImage)
 }

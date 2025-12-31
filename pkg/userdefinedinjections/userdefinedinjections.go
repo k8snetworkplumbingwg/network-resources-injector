@@ -19,12 +19,12 @@ const (
 // UserDefinedInjections user defined injections
 type UserDefinedInjections struct {
 	sync.Mutex
-	Patchs map[string]types.JsonPatchOperation
+	Patchs map[string]types.JSONPatchOperation
 }
 
 // CreateUserInjectionsStructure returns empty UserDefinedInjections structure
 func CreateUserInjectionsStructure() *UserDefinedInjections {
-	var userDefinedInjects = UserDefinedInjections{Patchs: make(map[string]types.JsonPatchOperation)}
+	var userDefinedInjects = UserDefinedInjections{Patchs: make(map[string]types.JSONPatchOperation)}
 	return &userDefinedInjects
 }
 
@@ -49,7 +49,7 @@ func (userDefinedInjects *UserDefinedInjections) SetUserDefinedInjections(inject
 			userDefinedInjects.Lock()
 			defer userDefinedInjects.Unlock()
 
-			var patch types.JsonPatchOperation
+			var patch types.JSONPatchOperation
 			var userDefinedPatchs = userDefinedInjects.Patchs
 
 			for k, value := range userDefinedInjectionsObj {
@@ -83,17 +83,17 @@ func (userDefinedInjects *UserDefinedInjections) SetUserDefinedInjections(inject
 			}
 		} else {
 			glog.Warningf("Map does not contains [%s]. Clear old entries.", userDefinedInjectionsMainKey)
-			userDefinedInjects.Patchs = make(map[string]types.JsonPatchOperation)
+			userDefinedInjects.Patchs = make(map[string]types.JSONPatchOperation)
 		}
 	} else {
 		glog.Warningf("Map does not contains [%s]. Clear old entries", types.ConfigMapMainFileKey)
-		userDefinedInjects.Patchs = make(map[string]types.JsonPatchOperation)
+		userDefinedInjects.Patchs = make(map[string]types.JSONPatchOperation)
 	}
 }
 
 // CreateUserDefinedPatch creates customized patch for the specified POD
-func (userDefinedInjects *UserDefinedInjections) CreateUserDefinedPatch(pod corev1.Pod) ([]types.JsonPatchOperation, error) {
-	var userDefinedPatch []types.JsonPatchOperation
+func (userDefinedInjects *UserDefinedInjections) CreateUserDefinedPatch(pod corev1.Pod) ([]types.JSONPatchOperation, error) {
+	var userDefinedPatch []types.JSONPatchOperation
 
 	// lock for reading
 	userDefinedInjects.Lock()

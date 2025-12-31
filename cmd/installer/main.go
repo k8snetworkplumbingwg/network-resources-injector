@@ -18,6 +18,7 @@ import (
 	"flag"
 
 	"github.com/golang/glog"
+
 	"github.com/k8snetworkplumbingwg/network-resources-injector/pkg/installer"
 )
 

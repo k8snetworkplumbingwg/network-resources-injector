@@ -26,8 +26,8 @@ const (
 	ConfigMapMainFileKey   = "config.json"
 )
 
-// JsonPatchOperation the JSON path operation
-type JsonPatchOperation struct {
+// JSONPatchOperation the JSON path operation
+type JSONPatchOperation struct {
 	Operation string      `json:"op"`
 	Path      string      `json:"path"`
 	Value     interface{} `json:"value,omitempty"`

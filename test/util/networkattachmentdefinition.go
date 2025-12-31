@@ -52,11 +52,11 @@ func GetNetworkAttachmentDefinition(networkName string, ns string) *cniv1.Networ
 	}
 }
 
-// {
-// 				"cniVersion": "0.3.0",
-// 				"name":       networkName,
-// 				"type":       "loopback",
-// 			},
+//	{
+//					"cniVersion": "0.3.0",
+//					"name":       networkName,
+//					"type":       "loopback",
+//				},
 func GetNetworkSpecConfig(networkName string) string {
 	config := "{\"cniVersion\": \"0.3.0\", \"name\": \"" + networkName + "\", \"type\":\"loopback\"}"
 	return config
