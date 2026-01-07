@@ -28,7 +28,7 @@ import (
 var _ = Describe("UserDefinedInjections", func() {
 	DescribeTable("Create user-defined patchs",
 
-		func(pod corev1.Pod, userDefinedInjectPatchs map[string]types.JsonPatchOperation, out []types.JsonPatchOperation) {
+		func(pod corev1.Pod, userDefinedInjectPatchs map[string]types.JSONPatchOperation, out []types.JSONPatchOperation) {
 			userDefinedInjects := CreateUserInjectionsStructure()
 			userDefinedInjects.Patchs = userDefinedInjectPatchs
 			appliedPatchs, _ := userDefinedInjects.CreateUserDefinedPatch(pod)
@@ -43,14 +43,14 @@ var _ = Describe("UserDefinedInjections", func() {
 				},
 				Spec: corev1.PodSpec{},
 			},
-			map[string]types.JsonPatchOperation{
-				"nri-inject-annotation": types.JsonPatchOperation{
+			map[string]types.JSONPatchOperation{
+				"nri-inject-annotation": {
 					Operation: "add",
 					Path:      "/metadata/annotations",
 					Value:     map[string]interface{}{"k8s.v1.cni.cncf.io/networks": "sriov-net"},
 				},
 			},
-			[]types.JsonPatchOperation{
+			[]types.JSONPatchOperation{
 				{
 					Operation: "add",
 					Path:      "/metadata/annotations",
@@ -67,8 +67,8 @@ var _ = Describe("UserDefinedInjections", func() {
 				},
 				Spec: corev1.PodSpec{},
 			},
-			map[string]types.JsonPatchOperation{
-				"nri-inject-annotation": types.JsonPatchOperation{
+			map[string]types.JSONPatchOperation{
+				"nri-inject-annotation": {
 					Operation: "add",
 					Path:      "/metadata/annotations",
 					Value:     map[string]interface{}{"k8s.v1.cni.cncf.io/networks": "sriov-net"},
@@ -85,8 +85,8 @@ var _ = Describe("UserDefinedInjections", func() {
 				},
 				Spec: corev1.PodSpec{},
 			},
-			map[string]types.JsonPatchOperation{
-				"nri-inject-annotation": types.JsonPatchOperation{
+			map[string]types.JSONPatchOperation{
+				"nri-inject-annotation": {
 					Operation: "add",
 					Path:      "/metadata/annotations",
 					Value:     map[string]interface{}{"k8s.v1.cni.cncf.io/networks": "sriov-net"},
@@ -97,7 +97,7 @@ var _ = Describe("UserDefinedInjections", func() {
 	)
 
 	DescribeTable("Setting user-defined injections",
-		func(in *corev1.ConfigMap, existing map[string]types.JsonPatchOperation, out map[string]types.JsonPatchOperation) {
+		func(in *corev1.ConfigMap, existing map[string]types.JSONPatchOperation, out map[string]types.JSONPatchOperation) {
 			userDefinedInjects := CreateUserInjectionsStructure()
 			userDefinedInjects.Patchs = existing
 			userDefinedInjects.SetUserDefinedInjections(in)
@@ -108,22 +108,22 @@ var _ = Describe("UserDefinedInjections", func() {
 			&corev1.ConfigMap{
 				Data: map[string]string{},
 			},
-			map[string]types.JsonPatchOperation{},
-			map[string]types.JsonPatchOperation{},
+			map[string]types.JSONPatchOperation{},
+			map[string]types.JSONPatchOperation{},
 		),
 		Entry(
 			"patch - empty config map",
 			&corev1.ConfigMap{
 				Data: map[string]string{},
 			},
-			map[string]types.JsonPatchOperation{
-				"nri-inject-annotation": types.JsonPatchOperation{
+			map[string]types.JSONPatchOperation{
+				"nri-inject-annotation": {
 					Operation: "add",
 					Path:      "/metadata/annotations",
 					Value:     map[string]interface{}{"v1.multus-cni.io/default-network": "sriov-net"},
 				},
 			},
-			map[string]types.JsonPatchOperation{},
+			map[string]types.JSONPatchOperation{},
 		),
 		Entry(
 			"patch - config map without main config.json key",
@@ -131,8 +131,8 @@ var _ = Describe("UserDefinedInjections", func() {
 				Data: map[string]string{
 					"config": "{\"user-defined-injections\": { \"nri-inject-annotation\": {\"op\": \"add\", \"path\": \"/metadata/annotations\", \"value\": { \"k8s.v1.cni.cncf.io/networks\": \"sriov-net\" }}}}"},
 			},
-			map[string]types.JsonPatchOperation{},
-			map[string]types.JsonPatchOperation{},
+			map[string]types.JSONPatchOperation{},
+			map[string]types.JSONPatchOperation{},
 		),
 		Entry(
 			"patch - config map without main config.json key",
@@ -140,14 +140,14 @@ var _ = Describe("UserDefinedInjections", func() {
 				Data: map[string]string{
 					"config": "{\"user-defined-injections\": { \"nri-inject-annotation\": {\"op\": \"add\", \"path\": \"/metadata/annotations\", \"value\": { \"k8s.v1.cni.cncf.io/networks\": \"sriov-net\" }}}}"},
 			},
-			map[string]types.JsonPatchOperation{
-				"nri-inject-annotation": types.JsonPatchOperation{
+			map[string]types.JSONPatchOperation{
+				"nri-inject-annotation": {
 					Operation: "add",
 					Path:      "/metadata/annotations",
 					Value:     map[string]interface{}{"v1.multus-cni.io/default-network": "sriov-net"},
 				},
 			},
-			map[string]types.JsonPatchOperation{},
+			map[string]types.JSONPatchOperation{},
 		),
 		Entry(
 			"patch - config map without userdefinedinjections key",
@@ -155,8 +155,8 @@ var _ = Describe("UserDefinedInjections", func() {
 				Data: map[string]string{
 					"config.json": "{\"custom\": { \"nri-inject-annotation\": {\"op\": \"add\", \"path\": \"/metadata/annotations\", \"value\": { \"k8s.v1.cni.cncf.io/networks\": \"sriov-net\" }}}}"},
 			},
-			map[string]types.JsonPatchOperation{},
-			map[string]types.JsonPatchOperation{},
+			map[string]types.JSONPatchOperation{},
+			map[string]types.JSONPatchOperation{},
 		),
 		Entry(
 			"patch - config map with errors in json path",
@@ -164,8 +164,8 @@ var _ = Describe("UserDefinedInjections", func() {
 				Data: map[string]string{
 					"config.json": "{\"user-defined-injections\": { \"nri-inject-annotation\": {\"op\": 5, \"path\": \"/metadata/annotations\", \"value\": { \"k8s.v1.cni.cncf.io/networks\": \"sriov-net\" }}}}"},
 			},
-			map[string]types.JsonPatchOperation{},
-			map[string]types.JsonPatchOperation{},
+			map[string]types.JSONPatchOperation{},
+			map[string]types.JSONPatchOperation{},
 		),
 		Entry(
 			"patch - config map with incorrect json path - not /metadata/annotations",
@@ -173,8 +173,8 @@ var _ = Describe("UserDefinedInjections", func() {
 				Data: map[string]string{
 					"config.json": "{\"user-defined-injections\": { \"nri-inject-annotation\": {\"op\": \"add\", \"path\": \"/metadata/supprise\", \"value\": { \"k8s.v1.cni.cncf.io/networks\": \"sriov-net\" }}}}"},
 			},
-			map[string]types.JsonPatchOperation{},
-			map[string]types.JsonPatchOperation{},
+			map[string]types.JSONPatchOperation{},
+			map[string]types.JSONPatchOperation{},
 		),
 		Entry(
 			"patch - additional networks annotation",
@@ -182,9 +182,9 @@ var _ = Describe("UserDefinedInjections", func() {
 				Data: map[string]string{
 					"config.json": "{\"user-defined-injections\": { \"nri-inject-annotation\": {\"op\": \"add\", \"path\": \"/metadata/annotations\", \"value\": { \"k8s.v1.cni.cncf.io/networks\": \"sriov-net\" }}}}"},
 			},
-			map[string]types.JsonPatchOperation{},
-			map[string]types.JsonPatchOperation{
-				"nri-inject-annotation": types.JsonPatchOperation{
+			map[string]types.JSONPatchOperation{},
+			map[string]types.JSONPatchOperation{
+				"nri-inject-annotation": {
 					Operation: "add",
 					Path:      "/metadata/annotations",
 					Value:     map[string]interface{}{"k8s.v1.cni.cncf.io/networks": "sriov-net"},
@@ -197,9 +197,9 @@ var _ = Describe("UserDefinedInjections", func() {
 				Data: map[string]string{
 					"config.json": "{\"user-defined-injections\": { \"nri-inject-annotation\": {\"op\": \"add\", \"path\": \"/metadata/annotations\", \"value\": {\"v1.multus-cni.io/default-network\": \"sriov-net\" }}}}"},
 			},
-			map[string]types.JsonPatchOperation{},
-			map[string]types.JsonPatchOperation{
-				"nri-inject-annotation": types.JsonPatchOperation{
+			map[string]types.JSONPatchOperation{},
+			map[string]types.JSONPatchOperation{
+				"nri-inject-annotation": {
 					Operation: "add",
 					Path:      "/metadata/annotations",
 					Value:     map[string]interface{}{"v1.multus-cni.io/default-network": "sriov-net"},
@@ -212,14 +212,14 @@ var _ = Describe("UserDefinedInjections", func() {
 				Data: map[string]string{
 					"config.json": "{\"user-defined-injections\": { }}"},
 			},
-			map[string]types.JsonPatchOperation{
-				"nri-inject-annotation": types.JsonPatchOperation{
+			map[string]types.JSONPatchOperation{
+				"nri-inject-annotation": {
 					Operation: "add",
 					Path:      "/metadata/annotations",
 					Value:     map[string]interface{}{"v1.multus-cni.io/default-network": "sriov-net"},
 				},
 			},
-			map[string]types.JsonPatchOperation{},
+			map[string]types.JSONPatchOperation{},
 		),
 		Entry(
 			"patch - overwrite existing userDefinedInjects",
@@ -227,15 +227,15 @@ var _ = Describe("UserDefinedInjections", func() {
 				Data: map[string]string{
 					"config.json": "{\"user-defined-injections\": { \"nri-inject-annotation\": {\"op\": \"add\", \"path\": \"/metadata/annotations\", \"value\": {\"v1.multus-cni.io/default-network\": \"sriov-net-new\"}}}}"},
 			},
-			map[string]types.JsonPatchOperation{
-				"nri-inject-annotation": types.JsonPatchOperation{
+			map[string]types.JSONPatchOperation{
+				"nri-inject-annotation": {
 					Operation: "add",
 					Path:      "/metadata/annotations",
 					Value:     map[string]interface{}{"v1.multus-cni.io/default-network": "sriov-net-old"},
 				},
 			},
-			map[string]types.JsonPatchOperation{
-				"nri-inject-annotation": types.JsonPatchOperation{
+			map[string]types.JSONPatchOperation{
+				"nri-inject-annotation": {
 					Operation: "add",
 					Path:      "/metadata/annotations",
 					Value:     map[string]interface{}{"v1.multus-cni.io/default-network": "sriov-net-new"},

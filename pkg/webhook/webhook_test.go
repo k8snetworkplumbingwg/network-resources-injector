@@ -106,7 +106,7 @@ var _ = Describe("Webhook", func() {
 
 	Describe("Writing a response", func() {
 		Context("with an AdmissionReview", func() {
-			It("should be marshalled and written to a HTTP Response Writer", func() {
+			It("should be marshaled and written to a HTTP Response Writer", func() {
 				w := httptest.NewRecorder()
 				ar := &admissionv1.AdmissionReview{}
 				ar.Response = &admissionv1.AdmissionResponse{
@@ -187,7 +187,7 @@ var _ = Describe("Webhook", func() {
 					},
 				}
 				containers := []corev1.Container{container}
-				initialPatch := []nritypes.JsonPatchOperation{}
+				initialPatch := []nritypes.JSONPatchOperation{}
 
 				updatedPatch, hugepageResourceList := processHugepagesForDownwardAPI(initialPatch, containers)
 
@@ -213,7 +213,7 @@ var _ = Describe("Webhook", func() {
 				}
 
 				containers := []corev1.Container{container}
-				initialPatch := []nritypes.JsonPatchOperation{}
+				initialPatch := []nritypes.JSONPatchOperation{}
 
 				_, hugepageResourceList := processHugepagesForDownwardAPI(initialPatch, containers)
 				Expect(len(hugepageResourceList)).To(Equal(4))
@@ -242,7 +242,7 @@ var _ = Describe("Webhook", func() {
 				}
 
 				containers := []corev1.Container{container}
-				initialPatch := []nritypes.JsonPatchOperation{}
+				initialPatch := []nritypes.JSONPatchOperation{}
 
 				_, hugepageResourceList := processHugepagesForDownwardAPI(initialPatch, containers)
 				Expect(len(hugepageResourceList)).To(Equal(0))
@@ -262,7 +262,7 @@ var _ = Describe("Webhook", func() {
 				}
 
 				containers := []corev1.Container{container}
-				initialPatch := []nritypes.JsonPatchOperation{}
+				initialPatch := []nritypes.JSONPatchOperation{}
 
 				_, hugepageResourceList := processHugepagesForDownwardAPI(initialPatch, containers)
 				Expect(len(hugepageResourceList)).To(Equal(2))
@@ -301,7 +301,7 @@ var _ = Describe("Webhook", func() {
 				}
 
 				containers := []corev1.Container{container}
-				initialPatch := []nritypes.JsonPatchOperation{}
+				initialPatch := []nritypes.JSONPatchOperation{}
 
 				_, hugepageResourceList := processHugepagesForDownwardAPI(initialPatch, containers)
 				Expect(len(hugepageResourceList)).To(Equal(3))
@@ -334,7 +334,7 @@ var _ = Describe("Webhook", func() {
 				}
 
 				containers := []corev1.Container{container}
-				initialPatch := []nritypes.JsonPatchOperation{}
+				initialPatch := []nritypes.JSONPatchOperation{}
 
 				_, hugepageResourceList := processHugepagesForDownwardAPI(initialPatch, containers)
 				Expect(len(hugepageResourceList)).To(Equal(0))
@@ -344,7 +344,7 @@ var _ = Describe("Webhook", func() {
 
 	DescribeTable("Get network selections",
 
-		func(annotateKey string, pod corev1.Pod, patchs []nritypes.JsonPatchOperation, out string, shouldExist bool) {
+		func(annotateKey string, pod corev1.Pod, patchs []nritypes.JSONPatchOperation, out string, shouldExist bool) {
 			nets, exist := getNetworkSelections(annotateKey, pod, patchs)
 			Expect(exist).To(Equal(shouldExist))
 			Expect(nets).Should(Equal(out))
@@ -359,7 +359,7 @@ var _ = Describe("Webhook", func() {
 				},
 				Spec: corev1.PodSpec{},
 			},
-			[]nritypes.JsonPatchOperation{
+			[]nritypes.JSONPatchOperation{
 				{
 					Operation: "add",
 					Path:      "/metadata/annotations",
@@ -379,7 +379,7 @@ var _ = Describe("Webhook", func() {
 				},
 				Spec: corev1.PodSpec{},
 			},
-			[]nritypes.JsonPatchOperation{
+			[]nritypes.JSONPatchOperation{
 				{
 					Operation: "add",
 					Path:      "/metadata/annotations",
@@ -399,7 +399,7 @@ var _ = Describe("Webhook", func() {
 				},
 				Spec: corev1.PodSpec{},
 			},
-			[]nritypes.JsonPatchOperation{
+			[]nritypes.JSONPatchOperation{
 				{
 					Operation: "add",
 					Path:      "/metadata/annotations",

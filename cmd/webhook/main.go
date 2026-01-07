@@ -105,7 +105,7 @@ func main() {
 
 	glog.Infof("starting mutating admission controller for network resources injection")
 
-	keyPair, err := webhook.NewTlsKeypairReloader(*cert, *key)
+	keyPair, err := webhook.NewTLSKeypairReloader(*cert, *key)
 	if err != nil {
 		glog.Fatalf("error load certificate: %s", err.Error())
 	}
@@ -139,7 +139,7 @@ func main() {
 				return
 			}
 			if r.Method != http.MethodPost {
-				http.Error(w, "Invalid HTTP verb requested", 405)
+				http.Error(w, "Invalid HTTP verb requested", http.StatusMethodNotAllowed)
 				return
 			}
 			webhook.MutateHandler(w, r)
@@ -188,12 +188,20 @@ func main() {
 	if err != nil {
 		glog.Fatalf("error starting fsnotify watcher: %v", err)
 	}
-	defer watcher.Close()
+	defer func() {
+		if err := watcher.Close(); err != nil {
+			glog.Errorf("error closing fsnotify watcher: %v", err)
+		}
+	}()
 
 	certUpdated := false
 	keyUpdated := false
-	watcher.Add(*cert)
-	watcher.Add(*key)
+	if err := watcher.Add(*cert); err != nil {
+		glog.Fatalf("error adding cert file to watcher: %v", err)
+	}
+	if err := watcher.Add(*key); err != nil {
+		glog.Fatalf("error adding key file to watcher: %v", err)
+	}
 
 	for {
 		select {
@@ -208,11 +216,15 @@ func main() {
 				glog.V(2).Infof("modified file: %v", event.Name)
 				if event.Name == *cert {
 					certUpdated = true
-					watcher.Add(*cert)
+					if err := watcher.Add(*cert); err != nil {
+						glog.Errorf("error re-adding cert file to watcher: %v", err)
+					}
 				}
 				if event.Name == *key {
 					keyUpdated = true
-					watcher.Add(*key)
+					if err := watcher.Add(*key); err != nil {
+						glog.Errorf("error re-adding key file to watcher: %v", err)
+					}
 				}
 				if keyUpdated && certUpdated {
 					if err := keyPair.Reload(); err != nil {

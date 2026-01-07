@@ -17,7 +17,7 @@ import (
 	"k8s.io/client-go/tools/remotecommand"
 )
 
-//CreateRunningPod create a pod and wait until it is running
+// CreateRunningPod create a pod and wait until it is running
 func CreateRunningPod(ci coreclient.CoreV1Interface, pod *corev1.Pod, timeout, interval time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -35,7 +35,7 @@ func CreateRunningPod(ci coreclient.CoreV1Interface, pod *corev1.Pod, timeout, i
 	return nil
 }
 
-//DeletePod will delete a pod
+// DeletePod will delete a pod
 func DeletePod(ci coreclient.CoreV1Interface, pod *corev1.Pod, timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -43,7 +43,7 @@ func DeletePod(ci coreclient.CoreV1Interface, pod *corev1.Pod, timeout time.Dura
 	return err
 }
 
-//UpdatePodInfo will get the current pod state and return it
+// UpdatePodInfo will get the current pod state and return it
 func UpdatePodInfo(ci coreclient.CoreV1Interface, pod *corev1.Pod, timeout time.Duration) (*corev1.Pod, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -54,7 +54,7 @@ func UpdatePodInfo(ci coreclient.CoreV1Interface, pod *corev1.Pod, timeout time.
 	return pod, nil
 }
 
-//GetPodDefinition will return a test pod
+// GetPodDefinition will return a test pod
 func GetPodDefinition(ns string, podName string) *corev1.Pod {
 	var graceTime int64 = 0
 	return &corev1.Pod{
@@ -75,7 +75,7 @@ func GetPodDefinition(ns string, podName string) *corev1.Pod {
 	}
 }
 
-//AddMetadataLabel adds label to the POD metadata section
+// AddMetadataLabel adds label to the POD metadata section
 // :param labelName - key in map, label name
 // :param labelContent - value, label content
 func AddMetadataLabel(pod *corev1.Pod, labelName, labelContent string) *corev1.Pod {
@@ -88,7 +88,7 @@ func AddMetadataLabel(pod *corev1.Pod, labelName, labelContent string) *corev1.P
 	return pod
 }
 
-//AddToPodDefinitionVolumesWithDownwardAPI adds to the POD specification at the 'path' downwardAPI volumes that expose POD namespace
+// AddToPodDefinitionVolumesWithDownwardAPI adds to the POD specification at the 'path' downwardAPI volumes that expose POD namespace
 // :param pod - POD object to be modified
 // :param mountPath - path of the folder in which file is going to be available
 // :param volumeName - name of the volume
@@ -188,14 +188,14 @@ func AddToPodDefinitionCpuLimits(pod *corev1.Pod, cpuNumber, containerNumber int
 	return pod
 }
 
-//GetOneNetwork add one network to pod
+// GetOneNetwork add one network to pod
 func GetOneNetwork(nad, ns string, podName string) *corev1.Pod {
 	pod := GetPodDefinition(ns, podName)
 	pod.Annotations = map[string]string{"k8s.v1.cni.cncf.io/networks": nad}
 	return pod
 }
 
-//GetOneNetworkTwoContainers returns POD with two containers and one network
+// GetOneNetworkTwoContainers returns POD with two containers and one network
 func GetOneNetworkTwoContainers(nad, ns, podName, secondContainerName string) *corev1.Pod {
 	pod := GetPodDefinition(ns, podName)
 	pod.Annotations = map[string]string{"k8s.v1.cni.cncf.io/networks": nad}
@@ -209,14 +209,14 @@ func GetOneNetworkTwoContainers(nad, ns, podName, secondContainerName string) *c
 	return pod
 }
 
-//GetMultiNetworks adds a network to annotation
+// GetMultiNetworks adds a network to annotation
 func GetMultiNetworks(nad []string, ns string, podName string) *corev1.Pod {
 	pod := GetPodDefinition(ns, podName)
 	pod.Annotations = map[string]string{"k8s.v1.cni.cncf.io/networks": strings.Join(nad, ",")}
 	return pod
 }
 
-//WaitForPodStateRunning waits for pod to enter running state
+// WaitForPodStateRunning waits for pod to enter running state
 func WaitForPodStateRunning(core coreclient.CoreV1Interface, podName, ns string, timeout, interval time.Duration) error {
 	return wait.PollImmediate(interval, timeout, func() (done bool, err error) {
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -244,8 +244,9 @@ func WaitForPodStateRunning(core coreclient.CoreV1Interface, podName, ns string,
 // :param containerName - container name on which command should be executed
 // :param command - command to be executed on POD
 // :return string output of the command (stdout)
-// 	       string output of the command (stderr)
-//         error Error object or when everthing is correct nil
+//
+//		       string output of the command (stderr)
+//	        error Error object or when everthing is correct nil
 func ExecuteCommand(core coreclient.CoreV1Interface, config *restclient.Config, podName, ns, containerName, command string) (string, string, error) {
 	shellCommand := []string{"/bin/sh", "-c", command}
 	request := core.RESTClient().Post().Resource("pods").Name(podName).Namespace(ns).SubResource("exec")
