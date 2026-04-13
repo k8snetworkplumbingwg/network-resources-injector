@@ -5,6 +5,8 @@
   - [Security](#security)
     - [Disable adding client CAs to server TLS endpoint](#disable-adding-client-cas-to-server-tls-endpoint)
     - [Client CAs](#client-cas)
+    - [TLS minimum version](#tls-minimum-version)
+    - [TLS cipher suites](#tls-cipher-suites)
   - [Additional features](#additional-features)
     - [Features control switches](#features-control-switches)
     - [Expose Hugepages via Downward API](#expose-hugepages-via-downward-api)
@@ -141,6 +143,18 @@ If you wish to not add any client CAs to the servers TLS endpoint, add ```--inse
 By default, we consume the client CA from the Kubernetes service account secrets directory ```/var/run/secrets/kubernetes.io/serviceaccount/```.
 If you wish to consume a client CA from a different location, please specify flag ```--client-ca``` with a valid path. If you wish to add more than one client CA, repeat this flag multiple times. If ```--client-ca``` is defined, the default client CA from the service account secrets directory will not be consumed.
 
+### TLS minimum version
+By default, Network Resources Injector uses `VersionTLS12` as the minimum TLS version. You can override it with `--tls-min-version` using `VersionTLS12` or `VersionTLS13`.
+Values below `VersionTLS12` are rejected at startup.
+
+### TLS cipher suites
+By default, Network Resources Injector uses Go runtime defaults for TLS 1.2 and earlier cipher suites.
+You can pin an explicit list with `--tls-cipher-suites` using Kubernetes/component-base cipher names, for example:
+```
+--tls-cipher-suites=TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+```
+Insecure cipher suites are rejected at startup.
+
 ## Additional features
 All additional Network Resource Injector features can be enabled by passing command line arguments to executable. It can be done by modification of arguments passed to webhook. Example yaml with deployment is here [server.yaml](deployments/server.yaml)
 
@@ -155,6 +169,9 @@ Currently supported arguments are below. If needed, detailed description is avai
 |insecure|false|Disable adding client CA to server TLS endpoint|NO|
 |client-ca|""|File containing client CA. This flag is repeatable if more than one client CA needs to be added to server|NO|
 |health-check-port|8444|The port to use for health check monitoring.|NO|
+|enable-http2|false|Enable HTTP/2 for the webhook server.|NO|
+|tls-min-version|VersionTLS12|Minimum TLS version. Supported values are VersionTLS12 and VersionTLS13.|NO|
+|tls-cipher-suites|""|Comma-separated list of TLS 1.2 and earlier cipher suite names. Empty means Go runtime defaults. Insecure cipher suites are rejected.|NO|
 |injectHugepageDownApi|false|Enable hugepage requests and limits into Downward API.|YES|
 |network-resource-name-keys|k8s.v1.cni.cncf.io/resourceName|comma separated resource name keys|YES|
 |honor-resources|false|Honor the existing requested resources requests & limits|YES|

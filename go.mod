@@ -14,6 +14,7 @@ require (
 	k8s.io/api v0.34.3
 	k8s.io/apimachinery v0.34.3
 	k8s.io/client-go v0.34.3
+	k8s.io/component-base v0.34.3
 	k8s.io/utils v0.0.0-20250604170112-4c0f3b243397
 )
 
@@ -32,6 +33,7 @@ require (
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674 // indirect
+	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jmoiron/sqlx v1.4.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
@@ -44,6 +46,7 @@ require (
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/pelletier/go-toml v1.9.5 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
+	github.com/spf13/cobra v1.9.1 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/vishvananda/netns v0.0.5 // indirect
 	github.com/weppos/publicsuffix-go v0.40.3-0.20250617082559-9b2e24a9e482 // indirect
