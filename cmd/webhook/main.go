@@ -53,6 +53,10 @@ func main() {
 	flag.Var(&clientCAPaths, "client-ca", "File containing client CA. This flag is repeatable if more than one client CA needs to be added to server")
 	healthCheckPort := flag.Int("health-check-port", 8444, "The port to use for health check monitoring")
 	enableHTTP2 := flag.Bool("enable-http2", false, "If HTTP/2 should be enabled for the webhook server.")
+	tlsCipherSuites := flag.String("tls-cipher-suites", "",
+		"Comma-separated list of TLS 1.2 and earlier cipher suites (for example TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256). Insecure cipher suites are rejected. If empty, uses Go runtime defaults.")
+	tlsMinVersion := flag.String("tls-min-version", "",
+		"Minimum TLS version (VersionTLS12, VersionTLS13). Values below VersionTLS12 are rejected. If empty, uses component-base default (VersionTLS12).")
 
 	// do initialization of control switches flags
 	controlSwitches := controlswitches.SetupControlSwitchesFlags()
@@ -115,6 +119,18 @@ func main() {
 		glog.Fatalf("error loading client CA pool: '%s'", err.Error())
 	}
 
+	cipherSuites, err := webhook.ParseTLSCipherSuites(*tlsCipherSuites)
+	if err != nil {
+		glog.Fatalf("invalid tls-cipher-suites flag: %v", err)
+	}
+
+	minVersion, err := webhook.TLSVersionToGo(*tlsMinVersion)
+	if err != nil {
+		glog.Fatalf("invalid tls-min-version flag: %v", err)
+	}
+
+	glog.Infof("TLS config: minVersion=%#x, cipherSuites=%v", minVersion, cipherSuites)
+
 	/* init API client */
 	clientset := webhook.SetupInClusterClient()
 
@@ -153,20 +169,10 @@ func main() {
 			MaxHeaderBytes:    1 << 20,
 			ReadHeaderTimeout: 1 * time.Second,
 			TLSConfig: &tls.Config{
-				ClientAuth:               webhook.GetClientAuth(*insecure),
-				MinVersion:               tls.VersionTLS12,
-				CurvePreferences:         []tls.CurveID{tls.CurveP521, tls.CurveP384},
-				ClientCAs:                clientCaPool.GetCertPool(),
-				PreferServerCipherSuites: true,
-				InsecureSkipVerify:       false,
-				CipherSuites: []uint16{
-					// tls 1.2
-					tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-					tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-					tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-					tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-					// tls 1.3 configuration not supported
-				},
+				ClientAuth:     webhook.GetClientAuth(*insecure),
+				MinVersion:     minVersion,
+				ClientCAs:      clientCaPool.GetCertPool(),
+				CipherSuites:   cipherSuites,
 				GetCertificate: keyPair.GetCertificateFunc(),
 			},
 			// CVE-2023-39325 https://github.com/golang/go/issues/63417
