@@ -57,6 +57,12 @@ func main() {
 		"Comma-separated list of TLS 1.2 and earlier cipher suites (for example TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256). Insecure cipher suites are rejected. If empty, uses Go runtime defaults.")
 	tlsMinVersion := flag.String("tls-min-version", "",
 		"Minimum TLS version (VersionTLS12, VersionTLS13). Values below VersionTLS12 are rejected. If empty, uses component-base default (VersionTLS12).")
+	tlsCurvePreferences := flag.String("tls-curve-preferences", "",
+		"Comma-separated list of numeric Go crypto/tls CurveID values, "+
+			"as the allowed key exchange mechanisms for the server. "+
+			"The supported values depend on the Go version used. "+
+			"See https://pkg.go.dev/crypto/tls#CurveID for values supported for each Go version. "+
+			"If empty, uses Go runtime defaults.")
 
 	// do initialization of control switches flags
 	controlSwitches := controlswitches.SetupControlSwitchesFlags()
@@ -129,7 +135,12 @@ func main() {
 		glog.Fatalf("invalid tls-min-version flag: %v", err)
 	}
 
-	glog.Infof("TLS config: minVersion=%#x, cipherSuites=%v", minVersion, cipherSuites)
+	curvePreferences, err := webhook.ParseCurvePreferences(*tlsCurvePreferences)
+	if err != nil {
+		glog.Fatalf("Error parsing TLS curve preferences: %v", err)
+	}
+
+	glog.Infof("TLS config: minVersion=%#x, cipherSuites=%v, curvePreferences=%v", minVersion, cipherSuites, curvePreferences)
 
 	/* init API client */
 	clientset := webhook.SetupInClusterClient()
@@ -169,11 +180,12 @@ func main() {
 			MaxHeaderBytes:    1 << 20,
 			ReadHeaderTimeout: 1 * time.Second,
 			TLSConfig: &tls.Config{
-				ClientAuth:     webhook.GetClientAuth(*insecure),
-				MinVersion:     minVersion,
-				ClientCAs:      clientCaPool.GetCertPool(),
-				CipherSuites:   cipherSuites,
-				GetCertificate: keyPair.GetCertificateFunc(),
+				ClientAuth:       webhook.GetClientAuth(*insecure),
+				MinVersion:       minVersion,
+				ClientCAs:        clientCaPool.GetCertPool(),
+				CipherSuites:     cipherSuites,
+				CurvePreferences: curvePreferences,
+				GetCertificate:   keyPair.GetCertificateFunc(),
 			},
 			// CVE-2023-39325 https://github.com/golang/go/issues/63417
 			TLSNextProto: make(map[string]func(*http.Server, *tls.Conn, http.Handler)),
