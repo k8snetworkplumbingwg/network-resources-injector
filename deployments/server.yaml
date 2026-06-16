@@ -45,6 +45,7 @@ spec:
         # Optional TLS hardening flags:
         # - -tls-min-version=VersionTLS13
         # - -tls-cipher-suites=TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+        # - -tls-curve-preferences=29,23,24
         - -logtostderr
         env:
         - name: NAMESPACE

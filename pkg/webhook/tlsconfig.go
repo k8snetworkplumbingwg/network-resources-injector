@@ -3,6 +3,7 @@ package webhook
 import (
 	"crypto/tls"
 	"fmt"
+	"strconv"
 	"strings"
 
 	cliflag "k8s.io/component-base/cli/flag"
@@ -49,6 +50,35 @@ func ParseTLSCipherSuites(cipherSuites string) ([]uint16, error) {
 		return nil, nil
 	}
 	return CipherNamesToIDs(strings.Split(trimmed, ","))
+}
+
+// ParseCurvePreferences parses a comma-separated list of numeric TLS CurveID
+// values (as defined in crypto/tls) and returns them as []tls.CurveID.
+// For example "29,23,24" selects X25519, CurveP256, and CurveP384.
+// The supported values depend on the Go version used.
+// See https://pkg.go.dev/crypto/tls#CurveID for values supported for each Go version.
+// Returns nil if the input is empty.
+func ParseCurvePreferences(curvePreferences string) ([]tls.CurveID, error) {
+	trimmed := strings.TrimSpace(curvePreferences)
+	if trimmed == "" {
+		return nil, nil
+	}
+
+	parts := strings.Split(trimmed, ",")
+	curves := make([]tls.CurveID, 0, len(parts))
+	for _, part := range parts {
+		s := strings.TrimSpace(part)
+		if s == "" {
+			return nil, fmt.Errorf("empty TLS CurveID value")
+		}
+		v, err := strconv.ParseUint(s, 10, 16)
+		if err != nil {
+			return nil, fmt.Errorf("invalid TLS CurveID value %q: %w", s, err)
+		}
+		curves = append(curves, tls.CurveID(v))
+	}
+
+	return curves, nil
 }
 
 // TLSVersionToGo converts a TLS version string (for example "VersionTLS12") to

@@ -152,6 +152,89 @@ var _ = Describe("TLS Configuration", func() {
 		})
 	})
 
+	Describe("ParseCurvePreferences", func() {
+		It("should return nil for empty input", func() {
+			curves, err := ParseCurvePreferences("")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(curves).To(BeNil())
+		})
+
+		It("should return nil for whitespace-only input", func() {
+			curves, err := ParseCurvePreferences("   ")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(curves).To(BeNil())
+		})
+
+		DescribeTable("valid single numeric CurveID",
+			func(input string, expected tls.CurveID) {
+				curves, err := ParseCurvePreferences(input)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(curves).To(HaveLen(1))
+				Expect(curves[0]).To(Equal(expected))
+			},
+			Entry("29 (X25519)", "29", tls.X25519),
+			Entry("23 (CurveP256)", "23", tls.CurveP256),
+			Entry("24 (CurveP384)", "24", tls.CurveP384),
+			Entry("25 (CurveP521)", "25", tls.CurveP521),
+			Entry("4588 (X25519MLKEM768)", "4588", tls.X25519MLKEM768),
+		)
+
+		It("should parse multiple comma-separated numeric CurveIDs", func() {
+			curves, err := ParseCurvePreferences("29,23,24")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(curves).To(Equal([]tls.CurveID{
+				tls.X25519,
+				tls.CurveP256,
+				tls.CurveP384,
+			}))
+		})
+
+		It("should trim whitespace around numeric CurveIDs", func() {
+			curves, err := ParseCurvePreferences("29, 23")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(curves).To(Equal([]tls.CurveID{
+				tls.X25519,
+				tls.CurveP256,
+			}))
+		})
+
+		It("should accept any valid uint16 CurveID without validation", func() {
+			curves, err := ParseCurvePreferences("9999")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(curves).To(Equal([]tls.CurveID{tls.CurveID(9999)}))
+		})
+
+		It("should return an error for values exceeding uint16 range", func() {
+			_, err := ParseCurvePreferences("70000")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("invalid TLS CurveID value"))
+		})
+
+		It("should return an error for negative values", func() {
+			_, err := ParseCurvePreferences("-1")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("invalid TLS CurveID value"))
+		})
+
+		It("should return an error for non-numeric string", func() {
+			_, err := ParseCurvePreferences("X25519")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("invalid TLS CurveID value"))
+		})
+
+		It("should return an error for trailing separators", func() {
+			_, err := ParseCurvePreferences("29,")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("empty TLS CurveID value"))
+		})
+
+		It("should return an error for repeated separators", func() {
+			_, err := ParseCurvePreferences("29,,23")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("empty TLS CurveID value"))
+		})
+	})
+
 	Describe("TLSVersionToGo", func() {
 		DescribeTable("valid TLS versions",
 			func(version string, expected uint16) {
