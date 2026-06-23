@@ -1,0 +1,285 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: en-US
+early_access: false
+enable_free_tier: true
+
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  in_progress_fortune: false
+  review_status: true
+  collapse_walkthrough: false
+
+  path_filters:
+    - "!go.sum"
+
+  auto_review:
+    enabled: true
+    drafts: true
+
+  # ── Path instructions ────────────────────────────────────────
+  path_instructions:
+
+    # ── Go code — general ────────────────────────────────────────
+    - path: "**/*.go"
+      instructions: |
+        Go security and best practices:
+        - Never ignore error returns; wrap errors with context using fmt.Errorf("...: %w", err)
+        - database/sql with placeholders; no fmt.Sprintf in queries
+        - Use stdlib crypto/* and golang.org/x/crypto; avoid third-party crypto libraries
+        - Integer overflow: bounds-check user-supplied sizes
+        - context.Context for cancellation and timeouts on all network operations
+        - Nil pointer checks on admission review requests, pod specs, and container
+          resources before accessing fields — webhook handlers receive arbitrary input
+        - Use structured logging (glog) with appropriate verbosity levels
+
+    # ── Webhook server entry point ───────────────────────────────
+    - path: "cmd/webhook/**/*.go"
+      instructions: |
+        Webhook server entry point review:
+        - TLS configuration: verify minimum TLS version (1.2+), strong cipher suites,
+          and proper certificate/key file path handling
+        - Certificate rotation: verify fsnotify-based certificate watching correctly
+          reloads TLS credentials without downtime
+        - Graceful shutdown: ensure the HTTP server handles OS signals (SIGTERM, SIGINT)
+          and drains in-flight requests before exiting
+        - Flag parsing: verify all command-line flags have sensible defaults
+          and are validated before use
+        - Health/readiness endpoints: verify they are configured correctly
+          for Kubernetes probes
+
+    # ── Admission webhook logic ──────────────────────────────────
+    - path: "pkg/webhook/**/*.go"
+      instructions: |
+        Mutating admission webhook review:
+        - JSON Patch operations: verify patches are correctly constructed
+          (valid paths, proper escaping of '/' and '~' in JSON pointer paths)
+        - Admission review handling: validate both v1 and v1beta1 AdmissionReview
+          request/response handling
+        - Network Attachment Definition (NAD) parsing: verify annotation parsing
+          is robust against malformed input (invalid JSON, missing fields)
+        - Resource injection logic: ensure injected resources (hugepages, downward API
+          volumes) do not conflict with existing pod resources
+        - Idempotency: applying the webhook mutation twice on the same pod must
+          produce the same result — verify no duplicate resource entries
+        - Security: validate that the webhook does not escalate pod privileges
+          or inject unexpected capabilities
+        - Error handling: webhook failures should return appropriate admission
+          responses (allow with warning vs deny) based on failurePolicy
+
+    # ── Control switches / feature flags ─────────────────────────
+    - path: "pkg/controlswitches/**/*.go"
+      instructions: |
+        Feature flag and control switch review:
+        - Verify default values are safe (features should be opt-in for
+          potentially breaking changes)
+        - Flag naming should be consistent and self-documenting
+        - Thread safety: verify concurrent access to switch state is safe
+          (switches may be read during admission while being configured)
+        - Verify that disabled features completely skip their code paths
+          without side effects
+
+    # ── User-defined injections ──────────────────────────────────
+    - path: "pkg/userdefinedinjections/**/*.go"
+      instructions: |
+        User-defined injection logic review:
+        - ConfigMap parsing: verify robust handling of malformed ConfigMap data
+          (invalid JSON, missing required fields, unexpected types)
+        - Injection rule validation: ensure rules cannot inject privileged
+          capabilities or escalate pod security
+        - Namespace scoping: verify injections respect namespace boundaries
+          and cannot cross-namespace inject
+        - Conflict resolution: verify behavior when multiple injection rules
+          match the same pod/container
+
+    # ── Cache utilities ──────────────────────────────────────────
+    - path: "pkg/tools/**/*.go"
+      instructions: |
+        Cache implementation review:
+        - Thread safety: verify all cache access is properly synchronized
+          (mutexes, sync.Map, or channels) — the cache is read during
+          admission requests which are concurrent
+        - Cache invalidation: verify cache entries are refreshed or expired
+          appropriately to reflect NAD changes
+        - Memory bounds: verify the cache does not grow unbounded
+        - Error handling: cache misses should be handled gracefully
+          (fall back to direct API lookup or return appropriate error)
+
+    # ── Installer logic ──────────────────────────────────────────
+    - path: "pkg/installer/**/*.go"
+      instructions: |
+        Webhook installer review:
+        - RBAC creation: verify the installer creates only the minimum
+          required RBAC resources (ServiceAccount, ClusterRole, ClusterRoleBinding)
+        - MutatingWebhookConfiguration: verify caBundle, failurePolicy,
+          namespaceSelector, and rules are correctly configured
+        - Idempotency: running the installer multiple times should not
+          create duplicate resources or fail
+        - Cleanup: verify the installer can properly clean up resources
+          it created (for uninstall scenarios)
+
+    # ── Types and constants ──────────────────────────────────────
+    - path: "pkg/types/**/*.go"
+      instructions: |
+        Type definitions review:
+        - JSONPatchOperation struct: verify JSON tags match RFC 6902 spec
+          (op, path, value, from)
+        - Constants: verify downward API paths and hugepages paths are correct
+          and follow Kubernetes conventions
+        - Backward compatibility: changes to exported types should not break
+          existing consumers
+
+    # ── Kubernetes manifests — deployment ─────────────────────────
+    - path: "deployments/**/*.{yaml,yml}"
+      instructions: |
+        Webhook deployment manifest review:
+        - MutatingWebhookConfiguration: verify failurePolicy (Fail vs Ignore),
+          reinvocationPolicy, namespaceSelector, and rules (operations, apiGroups,
+          resources) are correct
+        - Webhook Service: verify the service correctly targets the webhook
+          pod on the right port
+        - Deployment/Pod security: runAsNonRoot (USER 1001), readOnlyRootFilesystem,
+          allowPrivilegeEscalation: false, drop ALL capabilities
+        - Resource limits (cpu, memory) on webhook container
+        - PodDisruptionBudget: verify minAvailable/maxUnavailable for HA
+        - RBAC: verify ServiceAccount, ClusterRole, ClusterRoleBinding follow
+          least privilege — webhook needs read access to pods, NADs, ConfigMaps
+        - TLS certificate mount paths match webhook server expectations
+        - Liveness + readiness probes defined
+        - automountServiceAccountToken: true only if needed for API access
+
+    # ── Kubernetes/OpenShift manifests — general ─────────────────
+    - path: "**/*.{yaml,yml}"
+      instructions: |
+        If this is a Kubernetes/OpenShift manifest:
+        - securityContext: runAsNonRoot, readOnlyRootFilesystem,
+          allowPrivilegeEscalation: false where applicable
+        - Drop ALL capabilities, add only what is required
+        - Resource limits (cpu, memory) on every container
+        - RBAC: least privilege; no cluster-admin for workloads
+        - Liveness + readiness probes defined
+        - automountServiceAccountToken: false unless needed
+
+    # ── Dockerfiles / container images ───────────────────────────
+    - path: "**/{Dockerfile,Containerfile}*"
+      instructions: |
+        Container image security:
+        - Multi-stage builds preferred; no build tools in final image
+        - USER non-root (this project uses USER 1001)
+        - COPY specific files, not entire context
+        - No secrets in ENV, ARG, or COPY
+        - No package manager cache in final layer
+        - This project has a single Dockerfile
+          (golang:alpine builder → alpine runtime, runs as USER 1001)
+        - Verify any added packages are justified
+
+    # ── E2E tests ────────────────────────────────────────────────
+    - path: "test/e2e/**/*.go"
+      instructions: |
+        E2E test quality (Ginkgo + Gomega):
+        - Test names must be stable and deterministic — no dynamic values
+          (pod names, timestamps, UUIDs) in It/Describe/Context/When titles
+        - Cleanup test resources after tests: pods, ConfigMaps, and NADs
+          must be deleted in AfterEach/AfterAll to avoid leaking resources
+        - Timeouts for webhook operations: admission webhook responses
+          should be fast, but cluster setup and pod creation may be slow —
+          use appropriate Eventually timeouts
+        - Test categories: hugepages injection, node selector injection,
+          resource name handling, user-defined injections, control switches
+        - Single responsibility: each It block should test one behavior
+        - Assertions should include meaningful failure messages
+
+    # ── Unit tests ───────────────────────────────────────────────
+    - path: "{pkg,cmd}/**/*_test.go"
+      instructions: |
+        Unit test quality:
+        - Use table-driven tests for validation logic with multiple cases
+        - Mock external dependencies (Kubernetes API calls, NAD client)
+          rather than requiring a real cluster
+        - Test error paths, not just happy paths
+        - For webhook handler tests: verify correct JSON Patch output
+          for various pod configurations and NAD annotations
+        - Assertions should include descriptive failure messages
+
+    # ── Supply chain & dependencies ──────────────────────────────
+    - path: "**/go.mod"
+      instructions: |
+        Supply chain security:
+        - New dependencies: justify the need, check license compatibility
+        - Pin exact versions; verify no unnecessary indirect dependencies added
+        - Flag known CVEs (cross-ref osv.dev)
+        - Check for replace directives pointing to forks — ensure they are
+          intentional and documented
+        - Key dependencies to watch: network-attachment-definition-client,
+          multus-cni, cloudflare/cfssl, k8s.io/* libraries
+
+    # ── CI/CD & GitHub Actions ───────────────────────────────────
+    - path: ".github/workflows/**/*"
+      instructions: |
+        CI/CD security:
+        - Pin actions by full SHA, not tag
+        - No secrets in logs; mask sensitive outputs
+        - Least privilege: minimize GITHUB_TOKEN permissions
+        - No pull_request_target with checkout of PR head
+        - Verify test workflows run the full validation suite
+        - Image build workflows: verify image tags and push targets are correct
+
+    # ── Build and deployment scripts ─────────────────────────────
+    - path: "scripts/**"
+      instructions: |
+        Build and deployment script review:
+        - Shell scripts should use set -e (fail on error) and set -u
+          (fail on undefined variables)
+        - No hardcoded credentials or secrets
+        - Verify script permissions are appropriate (not world-writable)
+        - E2E setup/teardown scripts: verify cluster cleanup is thorough
+        - Certificate generation scripts: verify key sizes and algorithms
+          meet security requirements
+
+    # ── Cryptography files ───────────────────────────────────────
+    - path: "**/*{crypt,cipher,sign,hash,tls,ssl,cert,key,token}*"
+      instructions: |
+        Cryptographic security:
+        - Banned: MD5, SHA1, DES, RC4, 3DES, Blowfish, ECB mode
+        - Symmetric: AES-256-GCM or ChaCha20-Poly1305
+        - Signing: Ed25519 or ECDSA P-256+
+        - Constant-time comparison for all secret/token data
+        - No custom crypto; use vetted libraries only
+        - Webhook TLS certificates: verify proper rotation and
+          minimum TLS version (1.2+)
+
+  # ── Security scanners ────────────────────────────────────────
+  tools:
+    gitleaks:
+      enabled: true
+    semgrep:
+      enabled: true
+    checkov:
+      enabled: true
+    hadolint:
+      enabled: true
+    trivy:
+      enabled: true
+    osvScanner:
+      enabled: true
+    actionlint:
+      enabled: true
+    ast-grep:
+      essential_rules: true
+
+# ── Knowledge base ───────────────────────────────────────────
+knowledge_base:
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - "**/CONTRIBUTING.md"
+  issues:
+    scope: "auto"
+  pull_requests:
+    scope: "auto"
+
+chat:
+  auto_reply: true
+  art: false
