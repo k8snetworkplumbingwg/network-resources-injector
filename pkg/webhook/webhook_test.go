@@ -173,6 +173,54 @@ var _ = Describe("Webhook", func() {
 			Entry("malformed hugepage", "hugepage-1Gi", "", false),
 			Entry("empty string", "", "", false),
 		)
+
+		Describe("Volume duplicate prevention", func() {
+			Context("addVolDownwardAPI", func() {
+				It("should skip injection when podnetinfo volume exists", func() {
+					pod := &corev1.Pod{
+						Spec: corev1.PodSpec{
+							Volumes: []corev1.Volume{
+								{Name: "podnetinfo"},
+							},
+						},
+					}
+					patch := addVolDownwardAPI([]nritypes.JSONPatchOperation{}, []hugepageResourceData{}, pod)
+					Expect(patch).To(BeEmpty())
+				})
+
+				It("should inject when podnetinfo volume does not exist", func() {
+					pod := &corev1.Pod{
+						ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "test"}},
+						Spec:       corev1.PodSpec{Volumes: []corev1.Volume{}},
+					}
+					patch := addVolDownwardAPI([]nritypes.JSONPatchOperation{}, []hugepageResourceData{}, pod)
+					Expect(patch).NotTo(BeEmpty())
+				})
+			})
+
+			Context("addVolumeMount", func() {
+				It("should skip containers with podnetinfo mount", func() {
+					containers := []corev1.Container{
+						{
+							Name: "test",
+							VolumeMounts: []corev1.VolumeMount{
+								{Name: "podnetinfo"},
+							},
+						},
+					}
+					patch := addVolumeMount([]nritypes.JSONPatchOperation{}, containers)
+					Expect(patch).To(BeEmpty())
+				})
+
+				It("should inject mount when podnetinfo mount does not exist", func() {
+					containers := []corev1.Container{
+						{Name: "test", VolumeMounts: []corev1.VolumeMount{}},
+					}
+					patch := addVolumeMount([]nritypes.JSONPatchOperation{}, containers)
+					Expect(patch).NotTo(BeEmpty())
+				})
+			})
+		})
 	})
 
 	Describe("Hugepage Detection Logic", func() {
