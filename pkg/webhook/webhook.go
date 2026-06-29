@@ -21,6 +21,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -57,6 +58,7 @@ const (
 	defaultNetworkAnnotationKey = "v1.multus-cni.io/default-network"
 	metadataAnnotationsPath     = "/metadata/annotations"
 	patchOperationAdd           = "add"
+	podNetInfoVolumeName        = "podnetinfo"
 )
 
 var (
@@ -429,6 +431,13 @@ func patchEmptyResources(patch []types.JSONPatchOperation, containerIndex uint, 
 }
 
 func addVolDownwardAPI(patch []types.JSONPatchOperation, hugepageResourceList []hugepageResourceData, pod *corev1.Pod) []types.JSONPatchOperation {
+	for _, vol := range pod.Spec.Volumes {
+		if vol.Name == podNetInfoVolumeName {
+			glog.Infof("%s volume already exists, skipping injection", podNetInfoVolumeName)
+			return patch
+		}
+	}
+
 	if len(pod.Spec.Volumes) == 0 {
 		patch = append(patch, types.JSONPatchOperation{
 			Operation: "add",
@@ -481,7 +490,7 @@ func addVolDownwardAPI(patch []types.JSONPatchOperation, hugepageResourceList []
 		DownwardAPI: &dAPIVolSource,
 	}
 	vol := corev1.Volume{
-		Name:         "podnetinfo",
+		Name:         podNetInfoVolumeName,
 		VolumeSource: volSource,
 	}
 
@@ -496,11 +505,17 @@ func addVolDownwardAPI(patch []types.JSONPatchOperation, hugepageResourceList []
 
 func addVolumeMount(patch []types.JSONPatchOperation, containers []corev1.Container) []types.JSONPatchOperation {
 	vm := corev1.VolumeMount{
-		Name:      "podnetinfo",
+		Name:      podNetInfoVolumeName,
 		ReadOnly:  true,
 		MountPath: types.DownwardAPIMountPath,
 	}
 	for containerIndex, container := range containers {
+		if slices.ContainsFunc(container.VolumeMounts, func(vm corev1.VolumeMount) bool {
+			return vm.Name == podNetInfoVolumeName
+		}) {
+			continue
+		}
+
 		if len(container.VolumeMounts) == 0 {
 			patch = append(patch, types.JSONPatchOperation{
 				Operation: "add",
