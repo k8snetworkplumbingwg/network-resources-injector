@@ -9,7 +9,7 @@ jobs:
   build:
     strategy:
       matrix:
-        go-version: [1.25.x]
+        go-version: [1.26.x]
         os: [ubuntu-24.04]
     runs-on: ${{ matrix.os }}
     env:
