@@ -61,6 +61,7 @@ const (
 
 var (
 	HugepageRegex         = regexp.MustCompile(`^hugepages-(.+)$`)
+	validNameRegex        = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
 	clientset             kubernetes.Interface
 	nadCache              netcache.NetAttachDefCacheService
 	userDefinedInjections *userdefinedinjections.UserDefinedInjections
@@ -271,7 +272,26 @@ func parsePodNetworkSelections(podNetworks, defaultNamespace string) ([]*multus.
 		}
 	}
 
-	/* fill missing namespaces with default value */
+	for _, networkSelection := range networkSelections {
+		if networkSelection == nil {
+			err := errors.New("invalid network selection: null element in list")
+			glog.Error(err)
+			return nil, err
+		}
+		for _, pair := range []struct{ label, value string }{
+			{"name", networkSelection.Name},
+			{"namespace", networkSelection.Namespace},
+			{"interface", networkSelection.InterfaceRequest},
+		} {
+			if pair.value != "" && !validNameRegex.MatchString(pair.value) {
+				err := errors.Errorf("invalid network selection element: %s '%s' contains invalid characters", pair.label, pair.value)
+				glog.Error(err)
+				return nil, err
+			}
+		}
+	}
+
+	/* fill missing namespaces with default value and reject cross-namespace references */
 	for _, networkSelection := range networkSelections {
 		if networkSelection.Namespace == "" {
 			if defaultNamespace == "" {
@@ -286,6 +306,12 @@ func parsePodNetworkSelections(podNetworks, defaultNamespace string) ([]*multus.
 			} else {
 				networkSelection.Namespace = defaultNamespace
 			}
+		} else if networkSelection.Namespace != defaultNamespace {
+			err := errors.Errorf(
+				"cross-namespace network attachment definition reference '%s/%s' is not allowed for namespace '%s'",
+				networkSelection.Namespace, networkSelection.Name, defaultNamespace)
+			glog.Error(err)
+			return nil, err
 		}
 	}
 
@@ -322,16 +348,6 @@ func parsePodNetworkSelectionElement(selection, defaultNamespace string) (*multu
 		err := errors.Errorf("invalid network selection element - more than one '@' rune in: '%s'", selection)
 		glog.Info(err)
 		return networkSelectionElement, err
-	}
-
-	validNameRegex, _ := regexp.Compile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
-	for _, unit := range []string{namespace, name, netInterface} {
-		ok := validNameRegex.MatchString(unit)
-		if !ok && len(unit) > 0 {
-			err := errors.Errorf("at least one of the network selection units is invalid: error found at '%s'", unit)
-			glog.Info(err)
-			return networkSelectionElement, err
-		}
 	}
 
 	networkSelectionElement = &multus.NetworkSelectionElement{
