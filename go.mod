@@ -10,7 +10,7 @@ require (
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.41.0
 	github.com/pkg/errors v0.9.1
-	gopkg.in/k8snetworkplumbingwg/multus-cni.v4 v4.2.4
+	gopkg.in/k8snetworkplumbingwg/multus-cni.v4 v4.3.0
 	k8s.io/api v0.36.2
 	k8s.io/apimachinery v0.36.2
 	k8s.io/client-go v0.36.2
