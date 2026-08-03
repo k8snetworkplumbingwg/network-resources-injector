@@ -36,6 +36,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	k8svalidation "k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
@@ -57,10 +58,12 @@ const (
 	defaultNetworkAnnotationKey = "v1.multus-cni.io/default-network"
 	metadataAnnotationsPath     = "/metadata/annotations"
 	patchOperationAdd           = "add"
+	maxInterfaceRequestLength   = 15
 )
 
 var (
 	HugepageRegex         = regexp.MustCompile(`^hugepages-(.+)$`)
+	validInterfaceRegex   = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
 	clientset             kubernetes.Interface
 	nadCache              netcache.NetAttachDefCacheService
 	userDefinedInjections *userdefinedinjections.UserDefinedInjections
@@ -271,6 +274,44 @@ func parsePodNetworkSelections(podNetworks, defaultNamespace string) ([]*multus.
 		}
 	}
 
+	for _, networkSelection := range networkSelections {
+		if networkSelection == nil {
+			err := errors.New("invalid network selection: null element in list")
+			glog.Error(err)
+			return nil, err
+		}
+
+		if networkSelection.Name == "" {
+			err := errors.New("invalid network selection element: name is required")
+			glog.Error(err)
+			return nil, err
+		}
+
+		for _, pair := range []struct{ label, value string }{
+			{"name", networkSelection.Name},
+			{"namespace", networkSelection.Namespace},
+		} {
+			if pair.value != "" && len(k8svalidation.IsDNS1123Label(pair.value)) != 0 {
+				err := errors.Errorf("invalid network selection element: %s must be a valid DNS-1123 label", pair.label)
+				glog.Error(err)
+				return nil, err
+			}
+		}
+
+		if networkSelection.InterfaceRequest != "" {
+			if len(networkSelection.InterfaceRequest) > maxInterfaceRequestLength {
+				err := errors.Errorf("invalid network selection element: interface must be at most %d bytes", maxInterfaceRequestLength)
+				glog.Error(err)
+				return nil, err
+			}
+			if !validInterfaceRegex.MatchString(networkSelection.InterfaceRequest) {
+				err := errors.New("invalid network selection element: interface contains invalid characters")
+				glog.Error(err)
+				return nil, err
+			}
+		}
+	}
+
 	/* fill missing namespaces with default value */
 	for _, networkSelection := range networkSelections {
 		if networkSelection.Namespace == "" {
@@ -322,16 +363,6 @@ func parsePodNetworkSelectionElement(selection, defaultNamespace string) (*multu
 		err := errors.Errorf("invalid network selection element - more than one '@' rune in: '%s'", selection)
 		glog.Info(err)
 		return networkSelectionElement, err
-	}
-
-	validNameRegex, _ := regexp.Compile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
-	for _, unit := range []string{namespace, name, netInterface} {
-		ok := validNameRegex.MatchString(unit)
-		if !ok && len(unit) > 0 {
-			err := errors.Errorf("at least one of the network selection units is invalid: error found at '%s'", unit)
-			glog.Info(err)
-			return networkSelectionElement, err
-		}
 	}
 
 	networkSelectionElement = &multus.NetworkSelectionElement{

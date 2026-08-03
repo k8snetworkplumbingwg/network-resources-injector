@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -416,16 +417,19 @@ var _ = Describe("Webhook", func() {
 
 		func(in string, out []*types.NetworkSelectionElement, shouldFail bool) {
 			actualOut, err := parsePodNetworkSelections(in, "default")
-			Expect(actualOut).To(ConsistOf(out))
 			if shouldFail {
 				Expect(err).To(HaveOccurred())
+				Expect(actualOut).To(BeNil())
+				return
 			}
+			Expect(err).NotTo(HaveOccurred())
+			Expect(actualOut).To(ConsistOf(out))
 		},
 		Entry(
 			"empty config",
 			"",
 			emptyList,
-			false,
+			true,
 		),
 		Entry(
 			"csv - correct ns/net@if format",
@@ -533,5 +537,73 @@ var _ = Describe("Webhook", func() {
 			},
 			false,
 		),
+		Entry(
+			"json - path traversal in namespace",
+			`[{"name": "net1", "namespace": "../../api/v1"}]`,
+			emptyList,
+			true,
+		),
+		Entry(
+			"json - path traversal in name",
+			`[{"name": "../secrets", "namespace": "default"}]`,
+			emptyList,
+			true,
+		),
+		Entry(
+			"json - uppercase in namespace",
+			`[{"name": "net1", "namespace": "Tenant-A"}]`,
+			emptyList,
+			true,
+		),
+		Entry(
+			"json - uppercase in name",
+			`[{"name": "MyNetwork", "namespace": "default"}]`,
+			emptyList,
+			true,
+		),
+		Entry(
+			"json - special characters in name",
+			`[{"name": "net;drop", "namespace": "default"}]`,
+			emptyList,
+			true,
+		),
+		Entry(
+			"json - spaces in namespace",
+			`[{"name": "net1", "namespace": "my namespace"}]`,
+			emptyList,
+			true,
+		),
+		Entry(
+			"json - invalid interface characters",
+			`[{"name": "net1", "namespace": "default", "interface": "../../evil"}]`,
+			emptyList,
+			true,
+		),
+		Entry(
+			"json - null element in array",
+			`[{"name": "net1"}, null]`,
+			emptyList,
+			true,
+		),
+		Entry("json - omitted name", `[{"namespace":"default"}]`, emptyList, true),
+		Entry("json - empty name", `[{"name":"","namespace":"default"}]`, emptyList, true),
+		Entry("csv - empty name", "default/", emptyList, true),
+		Entry("csv - interface without name", "@eth0", emptyList, true),
+		Entry("json - 63 byte name", `[{"name":"`+strings.Repeat("a", 63)+`"}]`, []*types.NetworkSelectionElement{{
+			Namespace: "default",
+			Name:      strings.Repeat("a", 63),
+		}}, false),
+		Entry("json - 64 byte name", `[{"name":"`+strings.Repeat("a", 64)+`"}]`, emptyList, true),
+		Entry("json - 63 byte namespace", `[{"name":"net1","namespace":"`+strings.Repeat("a", 63)+`"}]`, []*types.NetworkSelectionElement{{
+			Namespace: strings.Repeat("a", 63),
+			Name:      "net1",
+		}}, false),
+		Entry("json - 64 byte namespace", `[{"name":"net1","namespace":"`+strings.Repeat("a", 64)+`"}]`, emptyList, true),
+		Entry("json - 15 byte interface", `[{"name":"net1","interface":"`+strings.Repeat("a", 15)+`"}]`, []*types.NetworkSelectionElement{{
+			Namespace:        "default",
+			Name:             "net1",
+			InterfaceRequest: strings.Repeat("a", 15),
+		}}, false),
+		Entry("json - 16 byte interface", `[{"name":"net1","interface":"`+strings.Repeat("a", 16)+`"}]`, emptyList, true),
 	)
 })
