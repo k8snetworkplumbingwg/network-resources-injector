@@ -106,6 +106,9 @@ func main() {
 			mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
 			})
+			mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			})
 			err := http.ListenAndServe(addr, mux)
 			if err != nil {
 				glog.Fatalf("error starting health check server: %v", err)
