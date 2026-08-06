@@ -477,10 +477,10 @@ var _ = Describe("Webhook", func() {
 		),
 		Entry(
 			"csv - correct ns/net@if format",
-			"ns1/net1@eth0",
+			"default/net1@eth0",
 			[]*types.NetworkSelectionElement{
 				{
-					Namespace:        "ns1",
+					Namespace:        "default",
 					Name:             "net1",
 					InterfaceRequest: "eth0",
 				},
@@ -513,10 +513,10 @@ var _ = Describe("Webhook", func() {
 		),
 		Entry(
 			"csv - correct ns/net format",
-			"ns1/net1",
+			"default/net1",
 			[]*types.NetworkSelectionElement{
 				{
-					Namespace:        "ns1",
+					Namespace:        "default",
 					Name:             "net1",
 					InterfaceRequest: "",
 				},
@@ -525,10 +525,10 @@ var _ = Describe("Webhook", func() {
 		),
 		Entry(
 			"csv - correct multiple networks format",
-			"ns1/net1,net2",
+			"default/net1,net2",
 			[]*types.NetworkSelectionElement{
 				{
-					Namespace:        "ns1",
+					Namespace:        "default",
 					Name:             "net1",
 					InterfaceRequest: "",
 				},
@@ -566,7 +566,7 @@ var _ = Describe("Webhook", func() {
 		),
 		Entry(
 			"json - correct example",
-			`[{"name": "net1"},{"name": "net2", "namespace": "ns1"}]`,
+			`[{"name": "net1"},{"name": "net2", "namespace": "default"}]`,
 			[]*types.NetworkSelectionElement{
 				{
 					Namespace:        "default",
@@ -574,12 +574,87 @@ var _ = Describe("Webhook", func() {
 					InterfaceRequest: "",
 				},
 				{
-					Namespace:        "ns1",
+					Namespace:        "default",
 					Name:             "net2",
 					InterfaceRequest: "",
 				},
 			},
 			false,
 		),
+		Entry(
+			"json - path traversal in namespace",
+			`[{"name": "net1", "namespace": "../../api/v1"}]`,
+			emptyList,
+			true,
+		),
+		Entry(
+			"json - path traversal in name",
+			`[{"name": "../secrets", "namespace": "default"}]`,
+			emptyList,
+			true,
+		),
+		Entry(
+			"json - uppercase in namespace",
+			`[{"name": "net1", "namespace": "Tenant-A"}]`,
+			emptyList,
+			true,
+		),
+		Entry(
+			"json - uppercase in name",
+			`[{"name": "MyNetwork", "namespace": "default"}]`,
+			emptyList,
+			true,
+		),
+		Entry(
+			"json - special characters in name",
+			`[{"name": "net;drop", "namespace": "default"}]`,
+			emptyList,
+			true,
+		),
+		Entry(
+			"json - spaces in namespace",
+			`[{"name": "net1", "namespace": "my namespace"}]`,
+			emptyList,
+			true,
+		),
+		Entry(
+			"json - invalid interface characters",
+			`[{"name": "net1", "namespace": "default", "interface": "../../evil"}]`,
+			emptyList,
+			true,
+		),
+		Entry(
+			"json - null element in array",
+			`[{"name": "net1"}, null]`,
+			emptyList,
+			true,
+		),
+	)
+
+	DescribeTable("Cross-namespace NAD reference rejection",
+		func(in string, podNamespace string, shouldFail bool) {
+			selections, err := parsePodNetworkSelections(in, podNamespace)
+			if shouldFail {
+				Expect(err).To(HaveOccurred(), "expected cross-namespace NAD reference to be rejected")
+				Expect(selections).To(BeNil())
+			} else {
+				Expect(err).NotTo(HaveOccurred())
+				Expect(selections).NotTo(BeEmpty())
+			}
+		},
+		Entry("csv - explicit cross-namespace reference",
+			"other-ns/net1", "tenant-a", true),
+		Entry("json - explicit cross-namespace reference",
+			`[{"name": "net1", "namespace": "other-ns"}]`, "tenant-a", true),
+		Entry("json - multiple networks with one cross-namespace",
+			`[{"name": "net1"}, {"name": "net2", "namespace": "other-ns"}]`, "tenant-a", true),
+		Entry("csv - same namespace explicit",
+			"tenant-a/net1", "tenant-a", false),
+		Entry("csv - no namespace uses default",
+			"net1", "tenant-a", false),
+		Entry("json - same namespace explicit",
+			`[{"name": "net1", "namespace": "tenant-a"}]`, "tenant-a", false),
+		Entry("json - no namespace uses default",
+			`[{"name": "net1"}]`, "tenant-a", false),
 	)
 })
