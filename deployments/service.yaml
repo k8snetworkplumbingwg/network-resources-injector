@@ -6,6 +6,10 @@ metadata:
 spec:
   ports:
   - port: 443
-    targetPort: 8443
+    targetPort: webhook
+    name: webhook
+  - port: 8444
+    targetPort: health-check
+    name: health-check
   selector:
     app: network-resources-injector

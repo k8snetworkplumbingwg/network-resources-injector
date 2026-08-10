@@ -99,6 +99,7 @@ func main() {
 	} else if *healthCheckPort == *port {
 		glog.Fatalf("Health check port should be different from port")
 	} else {
+		glog.Infof("starting health check server on %s:%d", *address, *healthCheckPort)
 		go func() {
 			addr := fmt.Sprintf("%s:%d", *address, *healthCheckPort)
 			mux := http.NewServeMux()
@@ -115,6 +116,17 @@ func main() {
 			}
 		}()
 	}
+
+	// Register health check handlers on the default mux as well so that
+	// health/readiness probes work when pointed at the main webhook port.
+	// This prevents 404 errors when probes are configured against the
+	// webhook port instead of the dedicated health-check port.
+	http.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	http.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
 
 	glog.Infof("starting mutating admission controller for network resources injection")
 

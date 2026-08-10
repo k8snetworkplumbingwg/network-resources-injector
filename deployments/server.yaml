@@ -64,6 +64,13 @@ spec:
         volumeMounts:
         - mountPath: /etc/tls
           name: tls
+        ports:
+        - containerPort: 8443
+          name: webhook
+          protocol: TCP
+        - containerPort: 8444
+          name: health-check
+          protocol: TCP
         resources:
           requests:
             memory: "50Mi"
@@ -75,18 +82,22 @@ spec:
           failureThreshold: 3
           httpGet:
             path: /healthz
-            port: 8444
+            port: health-check
             scheme: HTTP
           initialDelaySeconds: 15
           periodSeconds: 20
           successThreshold: 1
           timeoutSeconds: 1
         readinessProbe:
+          failureThreshold: 3
           httpGet:
             path: /readyz
-            port: 8444
+            port: health-check
+            scheme: HTTP
           initialDelaySeconds: 5
           periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 1
       initContainers:
       - name: installer
         image: network-resources-injector:latest
