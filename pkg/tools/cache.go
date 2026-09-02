@@ -35,7 +35,7 @@ type NetAttachDefCache struct {
 }
 
 type NetAttachDefCacheService interface {
-	Start()
+	Start() cache.InformerSynced
 	Stop()
 	Get(namespace string, networkName string) map[string]string
 }
@@ -46,7 +46,7 @@ func Create() NetAttachDefCacheService {
 }
 
 // Start creates informer for NetworkAttachmentDefinition events and populate the local cache
-func (nc *NetAttachDefCache) Start() {
+func (nc *NetAttachDefCache) Start() cache.InformerSynced {
 	factory := externalversions.NewSharedInformerFactoryWithOptions(setupNetAttachDefClient(), 0, externalversions.WithNamespace(""))
 	informer := factory.K8sCniCncfIo().V1().NetworkAttachmentDefinitions().Informer()
 	// mutex to serialize the events.
@@ -86,6 +86,7 @@ func (nc *NetAttachDefCache) Start() {
 		glog.Infof("net-attach-def informer is stopped")
 		atomic.StoreInt32(&(nc.isRunning), int32(0))
 	}()
+	return informer.HasSynced
 }
 
 // Stop teardown the NetworkAttachmentDefinition informer
