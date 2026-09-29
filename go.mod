@@ -8,7 +8,7 @@ require (
 	github.com/golang/glog v1.2.5
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.7.7
 	github.com/onsi/ginkgo v1.16.5
-	github.com/onsi/gomega v1.43.0
+	github.com/onsi/gomega v1.43.1
 	github.com/pkg/errors v0.9.1
 	gopkg.in/k8snetworkplumbingwg/multus-cni.v4 v4.3.1
 	k8s.io/api v0.36.4
@@ -52,7 +52,7 @@ require (
 	github.com/zmap/zcrypto v0.0.0-20250630201916-3e2e710901d6 // indirect
 	github.com/zmap/zlint/v3 v3.6.6 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
-	go.yaml.in/yaml/v3 v3.0.4 // indirect
+	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/crypto v0.53.0 // indirect
 	golang.org/x/net v0.56.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
