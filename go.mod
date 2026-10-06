@@ -1,9 +1,9 @@
 module github.com/k8snetworkplumbingwg/network-resources-injector
 
-go 1.26.0
+go 1.27
 
 require (
-	github.com/cloudflare/cfssl v1.6.5
+	github.com/cloudflare/cfssl v1.7.0
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/golang/glog v1.2.5
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.7.7
