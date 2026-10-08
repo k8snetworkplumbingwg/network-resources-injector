@@ -19,8 +19,10 @@ import (
 	"crypto/tls"
 	"flag"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
+	"sync/atomic"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -43,6 +45,7 @@ const (
 func main() {
 	var namespace string
 	var clientCAPaths webhook.ClientCAFlags
+	var listening atomic.Bool
 
 	/* load configuration */
 	port := flag.Int("port", 8443, "The port on which to serve.")
@@ -96,24 +99,9 @@ func main() {
 
 	if !isValidPort(*healthCheckPort) {
 		glog.Fatalf("Invalid health check port number. Choose between 1024 and 65535")
-	} else if *healthCheckPort == *port {
+	}
+	if *healthCheckPort == *port {
 		glog.Fatalf("Health check port should be different from port")
-	} else {
-		go func() {
-			addr := fmt.Sprintf("%s:%d", *address, *healthCheckPort)
-			mux := http.NewServeMux()
-
-			mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(http.StatusOK)
-			})
-			mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(http.StatusOK)
-			})
-			err := http.ListenAndServe(addr, mux)
-			if err != nil {
-				glog.Fatalf("error starting health check server: %v", err)
-			}
-		}()
 	}
 
 	glog.Infof("starting mutating admission controller for network resources injection")
@@ -153,11 +141,36 @@ func main() {
 
 	// initialize webhook with cache
 	netAnnotationCache := netcache.Create()
-	netAnnotationCache.Start()
+	nadCacheSynced := netAnnotationCache.Start()
 	webhook.SetNetAttachDefCache(netAnnotationCache)
 
 	userInjections := userdefinedinjections.CreateUserInjectionsStructure()
 	webhook.SetUserInjectionStructure(userInjections)
+
+	go func() {
+		addr := fmt.Sprintf("%s:%d", *address, *healthCheckPort)
+		mux := http.NewServeMux()
+
+		mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})
+
+		mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
+			switch {
+			case !listening.Load():
+				http.Error(w, "admission port not listening", http.StatusServiceUnavailable)
+			case !nadCacheSynced():
+				http.Error(w, "net-attach-def cache not synced", http.StatusServiceUnavailable)
+			default:
+				w.WriteHeader(http.StatusOK)
+			}
+		})
+
+		err := http.ListenAndServe(addr, mux)
+		if err != nil {
+			glog.Fatalf("error starting health check server: %v", err)
+		}
+	}()
 
 	go func() {
 		/* register handlers */
@@ -198,8 +211,12 @@ func main() {
 			httpServer.TLSNextProto = nil
 		}
 
-		err := httpServer.ListenAndServeTLS("", "")
+		ln, err := net.Listen("tcp", httpServer.Addr)
 		if err != nil {
+			glog.Fatalf("error listening on %s: %v", httpServer.Addr, err)
+		}
+		listening.Store(true)
+		if err := httpServer.ServeTLS(ln, "", ""); err != nil {
 			glog.Fatalf("error starting web server: %v", err)
 		}
 	}()
