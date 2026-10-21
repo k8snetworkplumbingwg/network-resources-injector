@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -33,6 +34,7 @@ import (
 
 	"github.com/k8snetworkplumbingwg/network-resources-injector/pkg/controlswitches"
 	nritypes "github.com/k8snetworkplumbingwg/network-resources-injector/pkg/types"
+	"github.com/k8snetworkplumbingwg/network-resources-injector/pkg/userdefinedinjections"
 )
 
 func createBool(value bool) *bool {
@@ -128,6 +130,76 @@ var _ = Describe("Webhook", func() {
 			structure := controlswitches.SetupControlSwitchesUnitTests(createBool(false), createBool(false), createString(""))
 			structure.InitControlSwitches()
 			SetControlSwitches(structure)
+		})
+
+		DescribeTable("rejecting invalid network references before lookup",
+			func(annotationKey, selection string) {
+				previousCache := nadCache
+				nadCache = nil // Any NAD lookup would panic instead of returning a validation denial.
+				defer func() { nadCache = previousCache }()
+				previous := userDefinedInjections
+				SetUserInjectionStructure(userdefinedinjections.CreateUserInjectionsStructure())
+				defer SetUserInjectionStructure(previous)
+				body, err := json.Marshal(map[string]interface{}{
+					"apiVersion": "admission.k8s.io/v1",
+					"kind":       "AdmissionReview",
+					"request": map[string]interface{}{
+						"uid":       "network-validation",
+						"namespace": "default",
+						"object": map[string]interface{}{
+							"apiVersion": "v1", "kind": "Pod",
+							"metadata": map[string]interface{}{
+								"name": "test", "namespace": "default",
+								"annotations": map[string]string{annotationKey: selection},
+							},
+						},
+					},
+				})
+				Expect(err).NotTo(HaveOccurred(), "encode admission fixture")
+				req := httptest.NewRequest("POST", "https://fakewebhook/mutate", bytes.NewReader(body))
+				req.Header.Set("Content-Type", "application/json")
+				w := httptest.NewRecorder()
+				MutateHandler(w, req)
+				Expect(w.Code).To(Equal(http.StatusOK), "reject %s: %s", annotationKey, selection)
+				var review admissionv1.AdmissionReview
+				Expect(json.Unmarshal(w.Body.Bytes(), &review)).To(Succeed())
+				Expect(review.Response).NotTo(BeNil())
+				Expect(review.Response.Allowed).To(BeFalse())
+				Expect(string(review.Response.UID)).To(Equal("network-validation"))
+				Expect(review.Response.Result).NotTo(BeNil())
+				Expect(review.Response.Result.Message).To(ContainSubstring("invalid network selection"))
+				Expect(review.Response.Patch).To(BeEmpty())
+				Expect(review.Response.PatchType).To(BeNil())
+			},
+			Entry("additional JSON", networksAnnotationKey, `[{"name":"net1","namespace":"other"}]`),
+			Entry("additional CSV", networksAnnotationKey, "other/net1"),
+			Entry("default JSON", defaultNetworkAnnotationKey, `[{"name":"net1","namespace":"other"}]`),
+			Entry("default CSV", defaultNetworkAnnotationKey, "other/net1"),
+			Entry("additional null", networksAnnotationKey, "null"),
+			Entry("default null", defaultNetworkAnnotationKey, "null"),
+			Entry("additional null element", networksAnnotationKey, "[null]"),
+			Entry("default null element", defaultNetworkAnnotationKey, "[null]"),
+			Entry("additional malformed name", networksAnnotationKey, `[{"name":"bad..name"}]`),
+			Entry("default malformed name", defaultNetworkAnnotationKey, `[{"name":"bad..name"}]`),
+			Entry("additional malformed JSON", networksAnnotationKey, `[{"name":`),
+			Entry("default malformed JSON", defaultNetworkAnnotationKey, `[{"name":`),
+			Entry("additional invalid interface", networksAnnotationKey, `[{"name":"net1","interface":"bad/name"}]`),
+			Entry("default invalid interface", defaultNetworkAnnotationKey, `[{"name":"net1","interface":"bad/name"}]`),
+		)
+
+		It("allows pods without network annotations", func() {
+			previous := userDefinedInjections
+			SetUserInjectionStructure(userdefinedinjections.CreateUserInjectionsStructure())
+			defer SetUserInjectionStructure(previous)
+			req := httptest.NewRequest("POST", "https://fakewebhook/mutate", strings.NewReader(
+				`{"apiVersion":"admission.k8s.io/v1","kind":"AdmissionReview","request":{"uid":"absent","namespace":"default","object":{"apiVersion":"v1","kind":"Pod","metadata":{"name":"test","namespace":"default"}}}}`))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			MutateHandler(w, req)
+			var review admissionv1.AdmissionReview
+			Expect(json.Unmarshal(w.Body.Bytes(), &review)).To(Succeed(), "decode absent-annotation response")
+			Expect(review.Response).NotTo(BeNil(), "admission response")
+			Expect(review.Response.Allowed).To(BeTrue(), "absent annotation skips network parsing")
 		})
 
 		Context("Request body is empty", func() {
@@ -462,25 +534,32 @@ var _ = Describe("Webhook", func() {
 	var emptyList []*types.NetworkSelectionElement
 	DescribeTable("Network selection elements parsing",
 
-		func(in string, out []*types.NetworkSelectionElement, shouldFail bool) {
-			actualOut, err := parsePodNetworkSelections(in, "default")
-			Expect(actualOut).To(ConsistOf(out))
-			if shouldFail {
-				Expect(err).To(HaveOccurred())
+		func(in string, out []*types.NetworkSelectionElement, shouldFail bool, podNamespace ...string) {
+			namespace := "default"
+			if len(podNamespace) > 0 {
+				namespace = podNamespace[0]
 			}
+			actualOut, err := parsePodNetworkSelections(in, namespace)
+			if shouldFail {
+				Expect(err).To(HaveOccurred(), "input: %s", in)
+				Expect(actualOut).To(BeNil(), "invalid input: %s", in)
+				return
+			}
+			Expect(err).NotTo(HaveOccurred(), "input: %s", in)
+			Expect(actualOut).To(ConsistOf(out), "input: %s", in)
 		},
 		Entry(
 			"empty config",
 			"",
 			emptyList,
-			false,
+			true,
 		),
 		Entry(
 			"csv - correct ns/net@if format",
-			"ns1/net1@eth0",
+			"default/net1@eth0",
 			[]*types.NetworkSelectionElement{
 				{
-					Namespace:        "ns1",
+					Namespace:        "default",
 					Name:             "net1",
 					InterfaceRequest: "eth0",
 				},
@@ -513,10 +592,10 @@ var _ = Describe("Webhook", func() {
 		),
 		Entry(
 			"csv - correct ns/net format",
-			"ns1/net1",
+			"default/net1",
 			[]*types.NetworkSelectionElement{
 				{
-					Namespace:        "ns1",
+					Namespace:        "default",
 					Name:             "net1",
 					InterfaceRequest: "",
 				},
@@ -525,10 +604,10 @@ var _ = Describe("Webhook", func() {
 		),
 		Entry(
 			"csv - correct multiple networks format",
-			"ns1/net1,net2",
+			"default/net1,net2",
 			[]*types.NetworkSelectionElement{
 				{
-					Namespace:        "ns1",
+					Namespace:        "default",
 					Name:             "net1",
 					InterfaceRequest: "",
 				},
@@ -542,7 +621,7 @@ var _ = Describe("Webhook", func() {
 		),
 		Entry(
 			"csv - incorrect format forward slashes",
-			"ns1/net1/if1",
+			"default/net1/if1",
 			emptyList,
 			true,
 		),
@@ -566,7 +645,7 @@ var _ = Describe("Webhook", func() {
 		),
 		Entry(
 			"json - correct example",
-			`[{"name": "net1"},{"name": "net2", "namespace": "ns1"}]`,
+			`[{"name": "net1"},{"name": "net2", "namespace": "default"}]`,
 			[]*types.NetworkSelectionElement{
 				{
 					Namespace:        "default",
@@ -574,12 +653,118 @@ var _ = Describe("Webhook", func() {
 					InterfaceRequest: "",
 				},
 				{
-					Namespace:        "ns1",
+					Namespace:        "default",
 					Name:             "net2",
 					InterfaceRequest: "",
 				},
 			},
 			false,
 		),
+		Entry(
+			"json - path traversal in namespace",
+			`[{"name": "net1", "namespace": "../../api/v1"}]`,
+			emptyList,
+			true,
+		),
+		Entry(
+			"json - path traversal in name",
+			`[{"name": "../secrets", "namespace": "default"}]`,
+			emptyList,
+			true,
+		),
+		Entry(
+			"json - uppercase in namespace",
+			`[{"name": "net1", "namespace": "Tenant-A"}]`,
+			emptyList,
+			true,
+		),
+		Entry(
+			"json - uppercase in name",
+			`[{"name": "MyNetwork", "namespace": "default"}]`,
+			emptyList,
+			true,
+		),
+		Entry(
+			"json - special characters in name",
+			`[{"name": "net;drop", "namespace": "default"}]`,
+			emptyList,
+			true,
+		),
+		Entry(
+			"json - spaces in namespace",
+			`[{"name": "net1", "namespace": "my namespace"}]`,
+			emptyList,
+			true,
+		),
+		Entry(
+			"json - invalid interface characters",
+			`[{"name": "net1", "namespace": "default", "interface": "../../evil"}]`,
+			emptyList,
+			true,
+		),
+		Entry(
+			"json - null element in array",
+			`[{"name": "net1"}, null]`,
+			emptyList,
+			true,
+		),
+		Entry("csv - 63 byte name", strings.Repeat("a", 63), []*types.NetworkSelectionElement{{Namespace: "default", Name: strings.Repeat("a", 63)}}, false),
+		Entry("csv - 64 byte name", strings.Repeat("a", 64), []*types.NetworkSelectionElement{{Namespace: "default", Name: strings.Repeat("a", 64)}}, false),
+		Entry("csv - 63 byte namespace", strings.Repeat("a", 63)+"/net1", []*types.NetworkSelectionElement{{Namespace: strings.Repeat("a", 63), Name: "net1"}}, false, strings.Repeat("a", 63)),
+		Entry("csv - 64 byte namespace", strings.Repeat("a", 64)+"/net1", emptyList, true, strings.Repeat("a", 64)),
+		Entry("csv - 15 byte interface", "net1@"+strings.Repeat("a", 15), []*types.NetworkSelectionElement{{Namespace: "default", Name: "net1", InterfaceRequest: strings.Repeat("a", 15)}}, false),
+		Entry("csv - 16 byte interface", "net1@"+strings.Repeat("a", 16), emptyList, true),
+		Entry("csv - invalid characters", "net;drop", emptyList, true),
+		Entry("json - missing admission namespace", `[{"name":"net1"}]`, emptyList, false, ""),
+		Entry("csv - missing admission namespace", "net1", emptyList, false, ""),
+		Entry("json - null", `null`, emptyList, true),
+		Entry("json - null only", `[null]`, emptyList, true),
+		Entry("json - empty array", `[]`, emptyList, false),
+		Entry("json - cross namespace", `[{"name":"net1","namespace":"other"}]`, emptyList, true),
+		Entry("csv - cross namespace", "other/net1", emptyList, true),
+		Entry("json - malformed", `[{"name":"net1"},`, emptyList, true),
+		Entry("csv - omitted name", ",net1", emptyList, true),
+		Entry("json - omitted name", `[{"namespace":"default"}]`, emptyList, true),
+		Entry("json - empty name", `[{"name":"","namespace":"default"}]`, emptyList, true),
+		Entry("csv - empty name", "default/", emptyList, true),
+		Entry("csv - interface without name", "@eth0", emptyList, true),
+		Entry("json - 63 byte name", `[{"name":"`+strings.Repeat("a", 63)+`"}]`, []*types.NetworkSelectionElement{{
+			Namespace: "default",
+			Name:      strings.Repeat("a", 63),
+		}}, false),
+		Entry("json - 64 byte name", `[{"name":"`+strings.Repeat("a", 64)+`"}]`, []*types.NetworkSelectionElement{{Namespace: "default", Name: strings.Repeat("a", 64)}}, false),
+		Entry("json - 63 byte namespace", `[{"name":"net1","namespace":"`+strings.Repeat("a", 63)+`"}]`, []*types.NetworkSelectionElement{{
+			Namespace: strings.Repeat("a", 63),
+			Name:      "net1",
+		}}, false, strings.Repeat("a", 63)),
+		Entry("json - 64 byte namespace", `[{"name":"net1","namespace":"`+strings.Repeat("a", 64)+`"}]`, emptyList, true),
+		Entry("json - 15 byte interface", `[{"name":"net1","interface":"`+strings.Repeat("a", 15)+`"}]`, []*types.NetworkSelectionElement{{
+			Namespace:        "default",
+			Name:             "net1",
+			InterfaceRequest: strings.Repeat("a", 15),
+		}}, false),
+		Entry("json - dotted name", "[{\"name\":\"team.network\"}]", []*types.NetworkSelectionElement{{Namespace: "default", Name: "team.network"}}, false),
+		Entry("json - 253 byte name", "[{\"name\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}]", []*types.NetworkSelectionElement{{Namespace: "default", Name: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}, false),
+		Entry("json - 254 byte name", "[{\"name\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}]", emptyList, true),
+		Entry("json - empty DNS component name", "[{\"name\":\"bad..name\"}]", emptyList, true),
+		Entry("json - leading dot name", "[{\"name\":\".name\"}]", emptyList, true),
+		Entry("json - trailing hyphen name", "[{\"name\":\"name-\"}]", emptyList, true),
+		Entry("csv - dotted name", "team.network", []*types.NetworkSelectionElement{{Namespace: "default", Name: "team.network"}}, false),
+		Entry("csv - 253 byte name", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", []*types.NetworkSelectionElement{{Namespace: "default", Name: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}, false),
+		Entry("csv - 254 byte name", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", emptyList, true),
+		Entry("csv - empty DNS component name", "bad..name", emptyList, true),
+		Entry("csv - leading dot name", ".name", emptyList, true),
+		Entry("csv - trailing hyphen name", "name-", emptyList, true),
+		Entry("json - compatible interface net1.100", "[{\"name\":\"net1\",\"interface\":\"net1.100\"}]", []*types.NetworkSelectionElement{{Namespace: "default", Name: "net1", InterfaceRequest: "net1.100"}}, false),
+		Entry("json - compatible interface Net_1:100", "[{\"name\":\"net1\",\"interface\":\"Net_1:100\"}]", []*types.NetworkSelectionElement{{Namespace: "default", Name: "net1", InterfaceRequest: "Net_1:100"}}, false),
+		Entry("json - compatible interface -net1", "[{\"name\":\"net1\",\"interface\":\"-net1\"}]", []*types.NetworkSelectionElement{{Namespace: "default", Name: "net1", InterfaceRequest: "-net1"}}, false),
+		Entry("json - forbidden interface character \" \"", "[{\"name\":\"net1\",\"interface\":\"net 1\"}]", emptyList, true),
+		Entry("json - forbidden interface character \"\\t\"", "[{\"name\":\"net1\",\"interface\":\"net\\t1\"}]", emptyList, true),
+		Entry("json - forbidden interface character \"\\n\"", "[{\"name\":\"net1\",\"interface\":\"net\\n1\"}]", emptyList, true),
+		Entry("json - forbidden interface character \"\\u000b\"", "[{\"name\":\"net1\",\"interface\":\"net\\u000b1\"}]", emptyList, true),
+		Entry("json - forbidden interface character \"\\f\"", "[{\"name\":\"net1\",\"interface\":\"net\\f1\"}]", emptyList, true),
+		Entry("json - forbidden interface character \"\\r\"", "[{\"name\":\"net1\",\"interface\":\"net\\r1\"}]", emptyList, true),
+		Entry("json - forbidden interface character \"/\"", "[{\"name\":\"net1\",\"interface\":\"net/1\"}]", emptyList, true),
+		Entry("json - 16 byte interface", `[{"name":"net1","interface":"`+strings.Repeat("a", 16)+`"}]`, emptyList, true),
 	)
 })

@@ -33,6 +33,18 @@ kubectl apply -f deployments/auth.yaml \
 ```
 For full installation and troubleshooting steps please see [Installation guide](docs/installation.md).
 
+Network selection names must be DNS-1123 subdomains (at most 253 bytes), such as
+`team.network`. Namespaces must be DNS-1123 labels (at most 63 bytes).
+Interface names may contain dots, uppercase letters and underscores, but must not
+contain whitespace or `/`, and must be at most 15 bytes (for example `net1.100`).
+Comma-separated annotations retain their `/`, `@` and `,` separators.
+
+**Breaking change:** Network Attachment Definitions must be in the pod's own
+namespace. Explicit references to other namespaces are rejected unconditionally
+in both JSON and comma-separated annotations. Omitted namespaces default to the
+pod namespace. Move or recreate referenced NADs in the pod namespace and update
+annotations before upgrading workloads that use cross-namespace references.
+
 ## Network resources injection example
 
 To see mutating webhook in action you're going to need to add custom resources to your Kubernetes node. In real life scenarios you're going to use network resources managed by network devices plugins, such as [k8snetworkplumbingwg/sriov-network-device-plugin](https://github.com/k8snetworkplumbingwg/sriov-network-device-plugin).
